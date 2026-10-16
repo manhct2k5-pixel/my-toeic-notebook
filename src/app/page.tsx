@@ -5,29 +5,26 @@ import Link from 'next/link';
 import { 
   BookOpen, 
   Sparkles, 
-  FileText, 
   Clock, 
   ArrowRight, 
   CheckCircle2, 
   Layers, 
-  Bookmark,
-  Calendar,
+  BookMarked,
   ShieldCheck,
-  AlertTriangle
+  RotateCcw,
+  Volume2
 } from 'lucide-react';
 import { 
   getVocabulary, 
-  getReadingLessons, 
-  getLessonAttempts,
+  getQuizAttempts,
   subscribeToStorage 
 } from '@/lib/storage';
-import { VocabularyItem, ReadingLesson, LessonAttempt } from '@/types';
+import { VocabularyItem, QuizAttempt } from '@/types';
 import { isDueForReview, getTodayISO } from '@/lib/srs';
 
 export default function HomePage() {
   const [words, setWords] = useState<VocabularyItem[]>([]);
-  const [readingLessons, setReadingLessons] = useState<ReadingLesson[]>([]);
-  const [recentAttempts, setRecentAttempts] = useState<LessonAttempt[]>([]);
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [todayISO, setTodayISO] = useState<string>('2026-10-16');
@@ -35,14 +32,12 @@ export default function HomePage() {
 
   const loadData = async () => {
     try {
-      const [v, rl, la] = await Promise.all([
+      const [v, qa] = await Promise.all([
         getVocabulary(),
-        getReadingLessons(),
-        getLessonAttempts(),
+        getQuizAttempts(),
       ]);
       setWords(v);
-      setReadingLessons(rl);
-      setRecentAttempts(la);
+      setQuizAttempts(qa);
     } finally {
       setLoading(false);
     }
@@ -63,20 +58,9 @@ export default function HomePage() {
   const totalWords = words.length;
   const wordsDueToday = words.filter((w) => isDueForReview(w, todayISO)).length;
   const unmemorizedWords = words.filter((w) => !w.is_memorized).length;
+  const needsReviewWords = words.filter((w) => w.needs_review || (w.incorrect_count && w.incorrect_count > 0)).length;
 
-  // Find ongoing lesson (last attempt or first reading lesson)
-  const lastAttempt = recentAttempts[0];
-  let ongoingLessonTitle = 'TOEIC Reading – Part 7: Reading Comprehension';
-  let ongoingLessonHref = '/reading';
-
-  if (lastAttempt) {
-    const r = readingLessons.find((item) => item.id === lastAttempt.lesson_id);
-    ongoingLessonTitle = r ? r.title : 'TOEIC Reading';
-    ongoingLessonHref = '/reading';
-  } else if (readingLessons.length > 0) {
-    ongoingLessonTitle = readingLessons[0].title;
-    ongoingLessonHref = '/reading';
-  }
+  const lastAttempt = quizAttempts[0];
 
   if (loading) {
     return (
@@ -96,13 +80,13 @@ export default function HomePage() {
       <div className="space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200/60">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Sổ học TOEIC thông minh</span>
+          <span>Sổ học từ vựng TOEIC thông minh</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
           {greeting} Chúc bạn một buổi học tập hiệu quả.
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 max-w-xl">
-          Quản lý từ vựng TOEIC theo chủ đề, bài học và ngày học. Học Reading gắn kết trực tiếp với sổ ghi chép điện tử.
+          Quản lý từ vựng TOEIC theo chủ đề, bài học và ngày học. Hệ thống Flashcard & Quiz Spaced Repetition giúp bạn ghi nhớ sâu và lâu dài.
         </p>
       </div>
 
@@ -160,44 +144,46 @@ export default function HomePage() {
             <span className="text-xs text-slate-500 font-medium">từ đến hạn ôn</span>
           </div>
           <p className="text-xs text-slate-500 pt-1">
-            Theo thuật toán ôn cách quãng (Spaced Repetition) để không bị quên.
+            Theo thuật toán ôn cách quãng (Spaced Repetition) để củng cố trí nhớ kịp thời.
           </p>
         </div>
 
       </div>
 
-      {/* 3. Bài Reading đang học dở */}
+      {/* 3. Tiến độ ôn tập & Hoạt động gần nhất */}
       <div className="p-5 sm:p-6 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
         <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-          Bài học gần nhất
+          Lịch trình ôn tập Spaced Repetition
         </span>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-600" />
+              <span className={`w-2 h-2 rounded-full ${wordsDueToday > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
               <h3 className="text-base font-bold text-slate-900">
-                {ongoingLessonTitle}
+                {wordsDueToday > 0 
+                  ? `Có ${wordsDueToday} từ vựng cần bạn ôn luyện hôm nay!` 
+                  : 'Hôm nay bạn đã hoàn thành tất cả các từ đến hạn ôn!'}
               </h3>
             </div>
             <p className="text-xs text-slate-500">
               {lastAttempt
-                ? `Đã làm bài với kết quả ${lastAttempt.score}/${lastAttempt.total} câu. Tiếp tục luyện tập để cải thiện kỹ năng đọc hiểu.`
-                : 'Luyện tập các bài đọc TOEIC Part 5, 6, 7 với lời giải thích chi tiết.'}
+                ? `Bài kiểm tra gần nhất: đạt ${lastAttempt.score_percentage}% (${lastAttempt.correct_count}/${lastAttempt.total_questions} từ).`
+                : 'Bắt đầu bài kiểm tra Quiz hoặc Flashcard để kiểm tra mức độ ghi nhớ.'}
             </p>
           </div>
 
           <Link
-            href={ongoingLessonHref}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs sm:text-sm font-semibold transition-colors shrink-0"
+            href="/practice"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-xs sm:text-sm font-semibold transition-colors shrink-0 shadow-xs"
           >
-            <span>Tiếp tục học</span>
+            <span>{wordsDueToday > 0 ? 'Bắt đầu ôn ngay' : 'Làm Quiz mới'}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
 
-      {/* 4. Hai nút hành động chính: "Tiếp tục học" & "Ôn từ vựng" */}
+      {/* 4. Hai nút điều hướng chính: "Ôn từ vựng" & "Mở My Notebook" */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
         <Link
           href="/practice"
@@ -205,12 +191,12 @@ export default function HomePage() {
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-blue-500/50 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+              <BookMarked className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="text-sm font-bold block">Ôn từ vựng ngay</span>
+              <span className="text-sm font-bold block">Ôn tập & Quiz</span>
               <span className="text-xs text-blue-100">
-                Flashcard, trắc nghiệm và gõ từ
+                Flashcard, Trắc nghiệm, Gõ từ & Nghe phát âm
               </span>
             </div>
           </div>
@@ -228,7 +214,7 @@ export default function HomePage() {
             <div>
               <span className="text-sm font-bold block">Mở My Notebook</span>
               <span className="text-xs text-slate-500">
-                Ghi chú, tra từ và xem theo chủ đề/Unit
+                Ghi chú, phát âm UK/US và phân loại từ
               </span>
             </div>
           </div>

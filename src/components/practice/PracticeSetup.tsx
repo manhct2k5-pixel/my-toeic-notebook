@@ -49,6 +49,8 @@ export function PracticeSetup({ words, topics, units, onStart }: PracticeSetupPr
   // Compute matching words based on scope
   const targetWords = React.useMemo(() => {
     let list = words;
+    const now = new Date().toISOString().split('T')[0];
+
     if (scope === 'topic' && selectedTopicId) {
       list = list.filter((w) => w.topic_ids.includes(selectedTopicId));
     } else if (scope === 'unit' && selectedUnitId) {
@@ -59,19 +61,28 @@ export function PracticeSetup({ words, topics, units, onStart }: PracticeSetupPr
       list = list.filter((w) => !w.is_memorized);
     } else if (scope === 'incorrect') {
       list = list.filter((w) => w.needs_review || (w.incorrect_count && w.incorrect_count > 0));
+    } else if (scope === 'due_today') {
+      list = list.filter((w) => {
+        if (w.next_review_date) {
+          return w.next_review_date.split('T')[0] <= now;
+        }
+        return !w.is_memorized || w.needs_review;
+      });
     }
     return list;
   }, [words, scope, selectedTopicId, selectedUnitId, selectedDate]);
 
   const maxAvailable = targetWords.length;
+  const requestedCount = questionCountChoice === 'all' ? maxAvailable : parseInt(questionCountChoice, 10);
+  const actualCount = Math.min(requestedCount, maxAvailable);
+  const isAdjusted = questionCountChoice !== 'all' && maxAvailable < requestedCount && maxAvailable > 0;
 
   const handleStart = () => {
     if (targetWords.length === 0) return;
 
     // Shuffle words
     const shuffled = [...targetWords].sort(() => 0.5 - Math.random());
-    const count = questionCountChoice === 'all' ? shuffled.length : Math.min(parseInt(questionCountChoice, 10), shuffled.length);
-    const finalWords = shuffled.slice(0, count);
+    const finalWords = shuffled.slice(0, actualCount);
 
     let scopeId: string | undefined;
     if (scope === 'topic') scopeId = selectedTopicId;
@@ -91,31 +102,37 @@ export function PracticeSetup({ words, topics, units, onStart }: PracticeSetupPr
     {
       id: 'flashcard',
       title: 'Flashcard lật thẻ',
-      desc: 'Mặt trước tiếng Anh, mặt sau nghĩa tiếng Việt, ví dụ và ghi chú cá nhân.',
+      desc: 'Mặt trước tiếng Anh & audio, mặt sau nghĩa, ví dụ, ghi chú và 3 mức đánh giá.',
       icon: Sparkles,
     },
     {
       id: 'multiple_choice',
-      title: 'Trắc nghiệm 4 đáp án',
-      desc: 'Xem từ vựng tiếng Anh và chọn nghĩa tiếng Việt chính xác nhất.',
+      title: 'Trắc nghiệm: Anh → Việt',
+      desc: 'Xem từ tiếng Anh và chọn nghĩa tiếng Việt chính xác nhất trong 4 phương án.',
+      icon: CheckCircle2,
+    },
+    {
+      id: 'vn_to_en',
+      title: 'Trắc nghiệm: Việt → Anh',
+      desc: 'Xem nghĩa tiếng Việt và chọn từ vựng tiếng Anh tương ứng trong 4 phương án.',
       icon: CheckCircle2,
     },
     {
       id: 'fill_in',
       title: 'Gõ từ tiếng Anh',
-      desc: 'Cho nghĩa tiếng Việt, bạn tự gõ chính xác từ vựng tiếng Anh.',
+      desc: 'Cho nghĩa tiếng Việt, bạn tự gõ chính xác từ vựng tiếng Anh (hỗ trợ gợi ý ký tự).',
       icon: FileQuestion,
     },
     {
       id: 'listening',
       title: 'Listening Vocabulary',
-      desc: 'Nghe phát âm chuẩn UK/US và gõ lại từ vựng bạn nghe được.',
+      desc: 'Nghe phát âm chuẩn UK/US và gõ lại từ vựng (cho phép nghe lại, chỉnh 0.75x/1.0x).',
       icon: Headphones,
     },
     {
       id: 'mixed',
       title: 'Mixed Quiz (Tổng hợp)',
-      desc: 'Kết hợp linh hoạt cả 3 dạng: trắc nghiệm, gõ từ và nghe từ.',
+      desc: 'Kết hợp linh hoạt cả 4 dạng: Trắc nghiệm Anh-Việt, Việt-Anh, Gõ từ và Nghe từ.',
       icon: Shuffle,
     },
   ];
@@ -246,6 +263,23 @@ export function PracticeSetup({ words, topics, units, onStart }: PracticeSetupPr
           >
             Từ cần ôn / hay sai ({words.filter((w) => w.needs_review || (w.incorrect_count && w.incorrect_count > 0)).length})
           </button>
+
+          <button
+            type="button"
+            onClick={() => setScope('due_today')}
+            className={`p-2.5 rounded-lg border text-xs font-medium transition-all text-left ${
+              scope === 'due_today'
+                ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-semibold'
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            Đến hạn ôn (SRS) ({
+              words.filter((w) => {
+                const now = new Date().toISOString().split('T')[0];
+                return (w.next_review_date && w.next_review_date.split('T')[0] <= now) || (!w.is_memorized || w.needs_review);
+              }).length
+            })
+          </button>
         </div>
 
         {/* Sub-select for Topic */}
@@ -337,12 +371,21 @@ export function PracticeSetup({ words, topics, units, onStart }: PracticeSetupPr
             </button>
           ))}
         </div>
+
+        {isAdjusted && (
+          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Lưu ý: Bạn chọn {requestedCount} câu nhưng phạm vi này hiện chỉ có {maxAvailable} từ. Hệ thống đã tự động điều chỉnh số câu về {maxAvailable}.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Start Button */}
       <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
         <span className="text-xs text-slate-500">
-          Sẽ kiểm tra {Math.min(questionCountChoice === 'all' ? maxAvailable : parseInt(questionCountChoice, 10), maxAvailable)} từ vựng.
+          Sẽ kiểm tra <strong>{actualCount}</strong> từ vựng.
         </span>
 
         <button

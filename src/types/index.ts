@@ -22,13 +22,13 @@ export interface Unit {
   id: string;
   title: string;
   description?: string;
-  category: 'Listening' | 'Reading' | 'General';
+  category: 'General' | 'Listening' | 'Reading';
   created_at: string;
   updated_at: string;
 }
 
 export interface VocabularySource {
-  type: 'listening' | 'reading' | 'manual';
+  type: 'listening' | 'reading' | 'manual' | 'notebook';
   lessonTitle?: string;
   contextSentence?: string;
   timestamp?: string;
@@ -70,10 +70,11 @@ export interface VocabularyItem {
 
 export type QuizMode = 
   | 'flashcard' 
-  | 'multiple_choice' 
-  | 'fill_in' 
-  | 'listening' 
-  | 'mixed';
+  | 'multiple_choice' // English -> Vietnamese
+  | 'vn_to_en'         // Vietnamese -> English
+  | 'fill_in'          // Typing English from Vietnamese
+  | 'listening'        // Audio Quiz: Listen & Type
+  | 'mixed';           // Mixed Quiz
 
 export type QuizScope = 
   | 'all' 
@@ -81,7 +82,8 @@ export type QuizScope =
   | 'unit' 
   | 'date' 
   | 'unmemorized' 
-  | 'incorrect';
+  | 'incorrect'
+  | 'due_today';
 
 export interface QuizAttempt {
   id: string;
@@ -94,41 +96,6 @@ export interface QuizAttempt {
   score_percentage: number;
   wrong_word_ids: string[];
   completed_at: string;
-}
-
-export interface Question {
-  id: string;
-  prompt: string;
-  image_url?: string;
-  options: {
-    key: 'A' | 'B' | 'C' | 'D';
-    text: string;
-  }[];
-  correct_answer: 'A' | 'B' | 'C' | 'D';
-  explanation_vi: string;
-}
-
-export interface ListeningLesson {
-  id: string;
-  part: 1 | 2 | 3 | 4;
-  title: string;
-  description: string;
-  audio_url: string;
-  audio_type?: 'mp3' | 'synthesized';
-  image_url?: string;
-  transcript: string;
-  questions: Question[];
-  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
-}
-
-export interface ReadingLesson {
-  id: string;
-  part: 5 | 6 | 7;
-  title: string;
-  description: string;
-  passage?: string; // for Part 6 & 7
-  questions: Question[];
-  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
 }
 
 export interface LessonAttempt {
@@ -149,5 +116,5 @@ export interface NotebookExportData {
   units: Unit[];
   vocabulary: VocabularyItem[];
   quiz_attempts: QuizAttempt[];
-  lesson_attempts: LessonAttempt[];
+  lesson_attempts?: LessonAttempt[];
 }

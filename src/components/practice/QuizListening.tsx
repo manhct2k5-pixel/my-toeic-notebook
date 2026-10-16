@@ -20,6 +20,7 @@ export function QuizListening({ words, onFinish, onExit }: QuizListeningProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [inputVal, setInputVal] = useState('');
   const [accent, setAccent] = useState<'us' | 'uk'>('us');
+  const [audioSpeed, setAudioSpeed] = useState<number>(1.0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [wrongWordIds, setWrongWordIds] = useState<string[]>([]);
   const [history, setHistory] = useState<
@@ -32,16 +33,21 @@ export function QuizListening({ words, onFinish, onExit }: QuizListeningProps) {
     if (currentWord) {
       // Auto play audio once on word change
       const timer = setTimeout(() => {
-        playAudio(accent);
+        playAudio(accent, audioSpeed);
       }, 300);
       return () => clearTimeout(timer);
     }
   }, [currentIndex, currentWord]);
 
-  const playAudio = (acc: 'us' | 'uk') => {
+  const playAudio = (acc: 'us' | 'uk', spd: number = audioSpeed) => {
     if (!currentWord) return;
     const url = acc === 'uk' ? currentWord.audio_uk : currentWord.audio_us;
-    playAudioOrSpeak(currentWord.word, acc, url);
+    playAudioOrSpeak({
+      text: currentWord.word,
+      accent: acc,
+      directAudioUrl: url,
+      rate: spd,
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -128,35 +134,64 @@ export function QuizListening({ words, onFinish, onExit }: QuizListeningProps) {
           </button>
         </div>
 
-        <div className="flex items-center justify-center gap-3 text-xs">
-          <button
-            type="button"
-            onClick={() => {
-              setAccent('us');
-              playAudio('us');
-            }}
-            className={`px-3 py-1 rounded-md border font-medium transition-colors ${
-              accent === 'us'
-                ? 'bg-blue-50 text-blue-700 border-blue-300'
-                : 'bg-white text-slate-600 border-slate-200'
-            }`}
-          >
-            Giọng Mỹ (US)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAccent('uk');
-              playAudio('uk');
-            }}
-            className={`px-3 py-1 rounded-md border font-medium transition-colors ${
-              accent === 'uk'
-                ? 'bg-blue-50 text-blue-700 border-blue-300'
-                : 'bg-white text-slate-600 border-slate-200'
-            }`}
-          >
-            Giọng Anh (UK)
-          </button>
+        <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setAccent('us');
+                playAudio('us');
+              }}
+              className={`px-3 py-1 rounded-md border font-medium transition-colors ${
+                accent === 'us'
+                  ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Giọng Mỹ (US)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAccent('uk');
+                playAudio('uk');
+              }}
+              className={`px-3 py-1 rounded-md border font-medium transition-colors ${
+                accent === 'uk'
+                  ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Giọng Anh (UK)
+            </button>
+          </div>
+
+          <div className="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200">
+            <button
+              type="button"
+              onClick={() => {
+                setAudioSpeed(0.75);
+                playAudio(accent, 0.75);
+              }}
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                audioSpeed === 0.75 ? 'bg-white text-blue-700 font-bold shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              0.75x
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAudioSpeed(1.0);
+                playAudio(accent, 1.0);
+              }}
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                audioSpeed === 1.0 ? 'bg-white text-blue-700 font-bold shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              1.0x
+            </button>
+          </div>
         </div>
 
         <p className="text-xs text-slate-500">

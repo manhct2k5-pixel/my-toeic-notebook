@@ -51,10 +51,22 @@ export function NotebookView() {
       setTopics(t);
       setUnits(u);
 
-      // Default select first word if none selected and on desktop
-      if (!selectedWordId && v.length > 0) {
-        setSelectedWordId(v[0].id);
+      // Check URL params for deep linked word
+      let initialWordId = selectedWordId;
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramWordId = urlParams.get('wordId');
+        if (paramWordId && v.some((w) => w.id === paramWordId)) {
+          initialWordId = paramWordId;
+          setMobileScreen('detail');
+        }
       }
+
+      // Default select first word if none selected and on desktop
+      if (!initialWordId && v.length > 0) {
+        initialWordId = v[0].id;
+      }
+      setSelectedWordId(initialWordId);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { PartOfSpeech } from '@/types';
+import { cacheWordAudio } from './speech';
 
 export interface DictionarySuggestion {
   word: string;
@@ -23,7 +24,6 @@ export async function lookupDictionary(rawWord: string): Promise<DictionarySugge
       headers: {
         'Accept': 'application/json',
       },
-      cache: 'force-cache',
     });
 
     if (!res.ok) {
@@ -46,14 +46,16 @@ export async function lookupDictionary(rawWord: string): Promise<DictionarySugge
         const audioUrl: string = p.audio || '';
         const text: string = p.text || '';
 
-        if (audioUrl.includes('-uk.') || audioUrl.includes('/uk/')) {
+        const lowerAudio = audioUrl.toLowerCase();
+        if (lowerAudio.includes('-uk.') || lowerAudio.includes('/uk/') || lowerAudio.includes('_uk.')) {
           if (!audio_uk) audio_uk = audioUrl;
           if (!phonetic_uk && text) phonetic_uk = text;
-        } else if (audioUrl.includes('-us.') || audioUrl.includes('/us/')) {
+        } else if (lowerAudio.includes('-us.') || lowerAudio.includes('/us/') || lowerAudio.includes('_us.')) {
           if (!audio_us) audio_us = audioUrl;
           if (!phonetic_us && text) phonetic_us = text;
-        } else if (audioUrl) {
+        } else if (audioUrl && audioUrl.endsWith('.mp3')) {
           if (!audio_us) audio_us = audioUrl;
+          else if (!audio_uk) audio_uk = audioUrl;
         }
 
         if (text && !phonetic_us && !phonetic_uk) {
@@ -66,6 +68,11 @@ export async function lookupDictionary(rawWord: string): Promise<DictionarySugge
     if (!phonetic_uk && entry.phonetic) {
       phonetic_uk = entry.phonetic;
       phonetic_us = entry.phonetic;
+    }
+
+    // Cache audio URLs for instant playback
+    if (audio_uk || audio_us) {
+      cacheWordAudio(cleanWord, { uk: audio_uk, us: audio_us });
     }
 
     let detectedPos: PartOfSpeech = 'noun';
@@ -107,7 +114,20 @@ export async function lookupDictionary(rawWord: string): Promise<DictionarySugge
       collocations: collocations.length > 0 ? collocations : undefined,
     };
   } catch {
-    // Return null when fetch fails, offline or not found
     return null;
   }
+}
+
+/**
+ * Quick fetch of authentic dictionary audio URLs on the fly
+ */
+export async function fetchWordAudioUrls(word: string): Promise<{ audio_uk?: string; audio_us?: string }> {
+  const result = await lookupDictionary(word);
+  if (result) {
+    return {
+      audio_uk: result.audio_uk,
+      audio_us: result.audio_us,
+    };
+  }
+  return {};
 }

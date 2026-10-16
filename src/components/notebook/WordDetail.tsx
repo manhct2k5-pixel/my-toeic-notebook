@@ -121,9 +121,34 @@ export function WordDetail({
     }, 50);
   };
 
+  const [audioSpeed, setAudioSpeed] = useState<number>(1.0);
+  const [playingKey, setPlayingKey] = useState<string | null>(null);
+
   const handleAudio = (accent: 'uk' | 'us') => {
+    const key = `word-${accent}`;
+    setPlayingKey(key);
     const url = accent === 'uk' ? word.audio_uk : word.audio_us;
-    playAudioOrSpeak(word.word, accent, url);
+    playAudioOrSpeak({
+      text: word.word,
+      accent,
+      directAudioUrl: url,
+      rate: audioSpeed,
+      onStart: () => setPlayingKey(key),
+      onEnd: () => setPlayingKey(null),
+      onError: () => setPlayingKey(null),
+    });
+  };
+
+  const handleSpeakText = (text: string, key: string, accent: 'uk' | 'us' = 'us') => {
+    setPlayingKey(key);
+    playAudioOrSpeak({
+      text,
+      accent,
+      rate: audioSpeed,
+      onStart: () => setPlayingKey(key),
+      onEnd: () => setPlayingKey(null),
+      onError: () => setPlayingKey(null),
+    });
   };
 
   const toggleMemorized = async () => {
@@ -211,29 +236,65 @@ export function WordDetail({
             </span>
           </div>
 
-          {/* Pronunciation UK / US buttons */}
-          <div className="flex items-center gap-4 mt-2.5 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200/70">
+          {/* Pronunciation UK / US buttons & Speed Control */}
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
+            {/* UK button */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-colors ${
+              playingKey === 'word-uk' 
+                ? 'bg-blue-100 border-blue-400 text-blue-900' 
+                : 'bg-slate-50 border-slate-200/70 text-slate-700'
+            }`}>
               <span className="text-[11px] font-bold text-slate-500">UK</span>
-              <span className="text-xs font-mono text-slate-700">{word.phonetic_uk || '—'}</span>
+              <span className="text-xs font-mono">{word.phonetic_uk || '—'}</span>
               <button
                 onClick={() => handleAudio('uk')}
-                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
                 title="Nghe giọng Anh (UK)"
               >
-                <Volume2 className="w-3.5 h-3.5" />
+                <Volume2 className={`w-3.5 h-3.5 ${playingKey === 'word-uk' ? 'animate-pulse text-blue-700' : ''}`} />
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200/70">
+            {/* US button */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-colors ${
+              playingKey === 'word-us' 
+                ? 'bg-blue-100 border-blue-400 text-blue-900' 
+                : 'bg-slate-50 border-slate-200/70 text-slate-700'
+            }`}>
               <span className="text-[11px] font-bold text-slate-500">US</span>
-              <span className="text-xs font-mono text-slate-700">{word.phonetic_us || '—'}</span>
+              <span className="text-xs font-mono">{word.phonetic_us || '—'}</span>
               <button
                 onClick={() => handleAudio('us')}
-                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
                 title="Nghe giọng Mỹ (US)"
               >
-                <Volume2 className="w-3.5 h-3.5" />
+                <Volume2 className={`w-3.5 h-3.5 ${playingKey === 'word-us' ? 'animate-pulse text-blue-700' : ''}`} />
+              </button>
+            </div>
+
+            {/* Speed toggle: 0.75x / 1.0x */}
+            <div className="flex items-center bg-slate-100 rounded-md p-0.5 border border-slate-200 text-xs">
+              <button
+                onClick={() => setAudioSpeed(0.75)}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                  audioSpeed === 0.75
+                    ? 'bg-white text-blue-700 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Tốc độ đọc chậm 0.75x"
+              >
+                0.75x
+              </button>
+              <button
+                onClick={() => setAudioSpeed(1.0)}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                  audioSpeed === 1.0
+                    ? 'bg-white text-blue-700 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Tốc độ đọc bình thường 1.0x"
+              >
+                1.0x
               </button>
             </div>
           </div>
@@ -257,7 +318,18 @@ export function WordDetail({
             </span>
             <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/70 space-y-1 text-sm">
               {word.example_en && (
-                <p className="text-slate-800 font-medium italic">&quot;{word.example_en}&quot;</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-slate-800 font-medium italic">&quot;{word.example_en}&quot;</p>
+                  <button
+                    onClick={() => handleSpeakText(word.example_en!, 'example')}
+                    className={`p-1 rounded text-slate-500 hover:text-blue-700 hover:bg-blue-50 transition-colors shrink-0 ${
+                      playingKey === 'example' ? 'text-blue-700 animate-pulse' : ''
+                    }`}
+                    title="Nghe câu ví dụ"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )}
               {word.example_vi && (
                 <p className="text-slate-600 text-xs">→ {word.example_vi}</p>
@@ -276,9 +348,18 @@ export function WordDetail({
               {word.collocations.map((col, idx) => (
                 <div
                   key={idx}
-                  className="px-3 py-1.5 text-xs font-mono bg-slate-50 rounded-md border border-slate-200/60 text-slate-800"
+                  className="px-3 py-1.5 text-xs font-mono bg-slate-50 rounded-md border border-slate-200/60 text-slate-800 flex items-center justify-between"
                 >
-                  {col}
+                  <span>{col}</span>
+                  <button
+                    onClick={() => handleSpeakText(col, `col-${idx}`)}
+                    className={`p-1 rounded text-slate-400 hover:text-blue-700 hover:bg-blue-50 transition-colors ${
+                      playingKey === `col-${idx}` ? 'text-blue-700 animate-pulse' : ''
+                    }`}
+                    title="Nghe phát âm cụm từ"
+                  >
+                    <Volume2 className="w-3 h-3" />
+                  </button>
                 </div>
               ))}
             </div>

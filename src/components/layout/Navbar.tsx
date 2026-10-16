@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
-  FileText, 
+  BookMarked,
   BookOpen, 
   Sparkles, 
   Settings, 
@@ -25,8 +25,8 @@ export function Navbar() {
 
   const navLinks = [
     { href: '/', label: 'Trang chủ', icon: Sparkles },
-    { href: '/reading', label: 'Reading', icon: FileText },
     { href: '/notebook', label: 'My Notebook', icon: BookOpen },
+    { href: '/practice', label: 'Ôn tập & Quiz', icon: BookMarked },
   ];
 
   return (

@@ -5,17 +5,12 @@ import {
   Topic,
   Unit,
   QuizAttempt,
-  LessonAttempt,
   NotebookExportData,
-  ListeningLesson,
-  ReadingLesson,
 } from '@/types';
 import {
   SEED_TOPICS,
   SEED_UNITS,
   SEED_VOCABULARY,
-  SEED_LISTENING_LESSONS,
-  SEED_READING_LESSONS,
 } from './seed-data';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { getTodayISO } from './srs';
@@ -437,37 +432,6 @@ export async function saveQuizAttempt(attempt: Omit<QuizAttempt, 'id' | 'complet
 }
 
 // -------------------------------------------------------------
-// LESSONS & ATTEMPTS
-// -------------------------------------------------------------
-export async function getListeningLessons(): Promise<ListeningLesson[]> {
-  return SEED_LISTENING_LESSONS;
-}
-
-export async function getReadingLessons(): Promise<ReadingLesson[]> {
-  return SEED_READING_LESSONS;
-}
-
-export async function getLessonAttempts(): Promise<LessonAttempt[]> {
-  initStorageIfNeeded();
-  return getLocalItem<LessonAttempt[]>(STORAGE_KEYS.LESSON_ATTEMPTS, []);
-}
-
-export async function saveLessonAttempt(
-  attempt: Omit<LessonAttempt, 'id' | 'completed_at'>
-): Promise<LessonAttempt> {
-  const attempts = await getLessonAttempts();
-  const newAttempt: LessonAttempt = {
-    ...attempt,
-    id: `lesson-attempt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    completed_at: new Date().toISOString(),
-  };
-
-  attempts.unshift(newAttempt);
-  setLocalItem(STORAGE_KEYS.LESSON_ATTEMPTS, attempts);
-  return newAttempt;
-}
-
-// -------------------------------------------------------------
 // EXPORT & IMPORT & CSV
 // -------------------------------------------------------------
 export async function exportData(): Promise<NotebookExportData> {
@@ -475,7 +439,6 @@ export async function exportData(): Promise<NotebookExportData> {
   const units = await getUnits();
   const vocabulary = await getVocabulary();
   const quiz_attempts = await getQuizAttempts();
-  const lesson_attempts = await getLessonAttempts();
 
   return {
     version: '1.0.0',
@@ -484,7 +447,6 @@ export async function exportData(): Promise<NotebookExportData> {
     units,
     vocabulary,
     quiz_attempts,
-    lesson_attempts,
   };
 }
 

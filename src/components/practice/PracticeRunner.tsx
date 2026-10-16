@@ -14,6 +14,7 @@ import { FlashcardRunner } from './FlashcardRunner';
 import { QuizMCQ } from './QuizMCQ';
 import { QuizFill } from './QuizFill';
 import { QuizListening } from './QuizListening';
+import { QuizMixed } from './QuizMixed';
 import { QuizResult } from './QuizResult';
 
 type PracticeStage = 'setup' | 'running' | 'result';
@@ -29,6 +30,7 @@ export function PracticeRunner() {
   const [activeScope, setActiveScope] = useState<QuizScope>('all');
   const [activeScopeId, setActiveScopeId] = useState<string | undefined>();
   const [quizWords, setQuizWords] = useState<VocabularyItem[]>([]);
+  const [initialBatchWords, setInitialBatchWords] = useState<VocabularyItem[]>([]);
 
   // Results state
   const [quizResults, setQuizResults] = useState<{
@@ -66,6 +68,7 @@ export function PracticeRunner() {
     setActiveScope(config.scope);
     setActiveScopeId(config.scopeId);
     setQuizWords(config.filteredWords);
+    setInitialBatchWords(config.filteredWords);
     setStage('running');
   };
 
@@ -100,6 +103,14 @@ export function PracticeRunner() {
     setStage('running');
   };
 
+  const handleRetryAll = () => {
+    if (initialBatchWords.length === 0) return;
+    // Reshuffle initial batch
+    const reshuffled = [...initialBatchWords].sort(() => 0.5 - Math.random());
+    setQuizWords(reshuffled);
+    setStage('running');
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 text-slate-500">
@@ -129,13 +140,14 @@ export function PracticeRunner() {
         correctCount={quizResults.correctCount}
         wrongWordIds={quizResults.wrongWordIds}
         history={quizResults.history}
+        onRetryAll={handleRetryAll}
         onRetryWrongOnly={handleRetryWrongOnly}
         onNewQuiz={() => setStage('setup')}
       />
     );
   }
 
-  // Running Stage
+  // Running Stage: Mode selection
   if (activeMode === 'flashcard') {
     return (
       <FlashcardRunner
@@ -149,6 +161,19 @@ export function PracticeRunner() {
   if (activeMode === 'multiple_choice') {
     return (
       <QuizMCQ
+        mode="multiple_choice"
+        words={quizWords}
+        allWords={words}
+        onFinish={handleFinishPractice}
+        onExit={() => setStage('setup')}
+      />
+    );
+  }
+
+  if (activeMode === 'vn_to_en') {
+    return (
+      <QuizMCQ
+        mode="vn_to_en"
         words={quizWords}
         allWords={words}
         onFinish={handleFinishPractice}
@@ -177,9 +202,20 @@ export function PracticeRunner() {
     );
   }
 
-  // Mixed mode: can use MCQ or Fill-in depending on question index
+  if (activeMode === 'mixed') {
+    return (
+      <QuizMixed
+        words={quizWords}
+        allWords={words}
+        onFinish={handleFinishPractice}
+        onExit={() => setStage('setup')}
+      />
+    );
+  }
+
   return (
     <QuizMCQ
+      mode="multiple_choice"
       words={quizWords}
       allWords={words}
       onFinish={handleFinishPractice}
