@@ -68,6 +68,39 @@ export interface VocabularyItem {
   updated_at: string;
 }
 
+export type ProfileId = 'profile_a' | 'profile_b';
+
+export interface NotebookMetadata {
+  token: string;
+  name: string;
+  profile_a_name: string;
+  profile_b_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WordProgress {
+  word_id: string;
+  profile_id: ProfileId;
+  is_memorized: boolean;
+  needs_review: boolean;
+  review_interval_days: number;
+  ease_factor: number;
+  repetitions: number;
+  next_review_date: string;
+  last_reviewed_at?: string;
+  incorrect_count: number;
+  correct_count: number;
+  updated_at?: string;
+}
+
+export interface NotesConflict {
+  wordId: string;
+  wordText: string;
+  serverNotes: string;
+  serverUpdatedAt: string;
+}
+
 export type QuizMode = 
   | 'flashcard' 
   | 'multiple_choice' // English -> Vietnamese
@@ -87,7 +120,8 @@ export type QuizScope =
 
 export interface QuizAttempt {
   id: string;
-  user_id?: string;
+  notebook_token?: string;
+  profile_id?: ProfileId;
   mode: QuizMode;
   scope_type: QuizScope;
   scope_id?: string;
@@ -112,9 +146,11 @@ export interface LessonAttempt {
 export interface NotebookExportData {
   version: string;
   exported_at: string;
+  notebook?: NotebookMetadata;
   topics: Topic[];
   units: Unit[];
   vocabulary: VocabularyItem[];
+  progress?: WordProgress[];
   quiz_attempts: QuizAttempt[];
   lesson_attempts?: LessonAttempt[];
 }

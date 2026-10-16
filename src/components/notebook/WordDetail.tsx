@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { VocabularyItem, Topic, Unit } from '@/types';
 import { playAudioOrSpeak } from '@/lib/speech';
-import { updateWordNotes, updateWordMemoryStatus, updateWordStudyDate } from '@/lib/storage';
+import { updateWordNotes, updateWordMemoryStatus, updateWordStudyDate, saveWord } from '@/lib/storage';
 
 interface WordDetailProps {
   word: VocabularyItem | null;
@@ -45,6 +45,11 @@ export function WordDetail({
   const [dateValue, setDateValue] = useState('');
   const [audioSpeed, setAudioSpeed] = useState<number>(1.0);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
+  const [conflictInfo, setConflictInfo] = useState<{
+    serverNotes: string;
+    myNotes: string;
+  } | null>(null);
+  const loadedUpdatedAtRef = useRef<string | undefined>(undefined);
   const noteDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   const topicMap = React.useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
@@ -58,6 +63,8 @@ export function WordDetail({
         setDateValue(word.study_date || '');
         setSaveStatus('idle');
         setEditingDate(false);
+        setConflictInfo(null);
+        loadedUpdatedAtRef.current = word.updated_at;
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -77,7 +84,7 @@ export function WordDetail({
     );
   }
 
-  // Handle Note Auto-Save
+  // Handle Note Auto-Save with Conflict Detection
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newVal = e.target.value;
     setNoteContent(newVal);
@@ -90,9 +97,19 @@ export function WordDetail({
     noteDebounceTimer.current = setTimeout(async () => {
       if (word) {
         try {
-          await updateWordNotes(word.id, newVal);
-          setSaveStatus('saved');
-          setTimeout(() => setSaveStatus('idle'), 2500);
+          const res = await updateWordNotes(word.id, newVal, loadedUpdatedAtRef.current);
+          if (res && res.conflict) {
+            setConflictInfo({
+              serverNotes: res.serverNotes || '',
+              myNotes: newVal,
+            });
+            setSaveStatus('idle');
+          } else {
+            setSaveStatus('saved');
+            setConflictInfo(null);
+            loadedUpdatedAtRef.current = new Date().toISOString();
+            setTimeout(() => setSaveStatus('idle'), 2500);
+          }
         } catch {
           setSaveStatus('error');
         }
@@ -104,12 +121,37 @@ export function WordDetail({
     if (word) {
       setSaveStatus('saving');
       try {
-        await updateWordNotes(word.id, noteContent);
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2500);
+        const res = await updateWordNotes(word.id, noteContent, loadedUpdatedAtRef.current);
+        if (res && res.conflict) {
+          setConflictInfo({
+            serverNotes: res.serverNotes || '',
+            myNotes: noteContent,
+          });
+          setSaveStatus('idle');
+        } else {
+          setSaveStatus('saved');
+          setConflictInfo(null);
+          loadedUpdatedAtRef.current = new Date().toISOString();
+          setTimeout(() => setSaveStatus('idle'), 2500);
+        }
       } catch {
         setSaveStatus('error');
       }
+    }
+  };
+
+  const handleForceSaveNotes = async (contentToSave: string) => {
+    if (!word) return;
+    setSaveStatus('saving');
+    try {
+      await saveWord({ ...word, notes: contentToSave }, { force: true });
+      setNoteContent(contentToSave);
+      setSaveStatus('saved');
+      setConflictInfo(null);
+      loadedUpdatedAtRef.current = new Date().toISOString();
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } catch {
+      setSaveStatus('error');
     }
   };
 
@@ -129,9 +171,19 @@ export function WordDetail({
     if (noteDebounceTimer.current) clearTimeout(noteDebounceTimer.current);
     noteDebounceTimer.current = setTimeout(async () => {
       try {
-        await updateWordNotes(word.id, newContent);
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2500);
+        const res = await updateWordNotes(word.id, newContent, loadedUpdatedAtRef.current);
+        if (res && res.conflict) {
+          setConflictInfo({
+            serverNotes: res.serverNotes || '',
+            myNotes: newContent,
+          });
+          setSaveStatus('idle');
+        } else {
+          setSaveStatus('saved');
+          setConflictInfo(null);
+          loadedUpdatedAtRef.current = new Date().toISOString();
+          setTimeout(() => setSaveStatus('idle'), 2500);
+        }
       } catch {
         setSaveStatus('error');
       }
@@ -457,6 +509,49 @@ export function WordDetail({
               `code`
             </button>
           </div>
+
+          {/* Conflict Resolution Panel */}
+          {conflictInfo && (
+            <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl space-y-2.5 animate-in fade-in">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Phát hiện xung đột: Bạn học vừa cập nhật ghi chú của từ này!</span>
+              </div>
+              <div className="p-2.5 bg-white/90 border border-amber-200 rounded-lg text-xs font-mono text-slate-800 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Bản ghi chú bạn học vừa lưu:</p>
+                {conflictInfo.serverNotes || '(Ghi chú trống)'}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const merged = (conflictInfo.serverNotes ? conflictInfo.serverNotes + '\n\n---\n\n' : '') + conflictInfo.myNotes;
+                    handleForceSaveNotes(merged);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs"
+                >
+                  Hợp nhất cả 2 nội dung
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleForceSaveNotes(conflictInfo.myNotes)}
+                  className="px-3 py-1.5 text-xs font-semibold text-amber-900 bg-white hover:bg-amber-100 border border-amber-300 rounded-lg"
+                >
+                  Ghi đè bằng bản của tôi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoteContent(conflictInfo.serverNotes);
+                    setConflictInfo(null);
+                  }}
+                  className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg"
+                >
+                  Dùng bản của bạn học
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Editable Textarea with auto-save */}
           <textarea

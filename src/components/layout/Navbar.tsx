@@ -11,7 +11,7 @@ import {
   Menu, 
   X
 } from 'lucide-react';
-import { UserMenu } from '@/components/auth/UserMenu';
+import { ProfileSwitcher } from '@/components/notebook/ProfileSwitcher';
 
 export function Navbar() {
   const pathname = usePathname();
@@ -37,7 +37,7 @@ export function Navbar() {
               <span className="font-semibold text-base tracking-tight text-slate-900 leading-none">
                 My TOEIC Notebook
               </span>
-              <span className="text-[11px] text-slate-500 font-medium">Sổ học tập cá nhân</span>
+              <span className="text-[11px] text-slate-500 font-medium">Sổ từ vựng 2 người học</span>
             </div>
           </Link>
 
@@ -65,7 +65,7 @@ export function Navbar() {
 
           {/* Right Status & User Menu */}
           <div className="hidden md:flex items-center gap-3">
-            <UserMenu />
+            <ProfileSwitcher />
 
             <Link
               href="/settings"
@@ -78,7 +78,7 @@ export function Navbar() {
 
           {/* Mobile Actions */}
           <div className="flex items-center gap-2 md:hidden">
-            <UserMenu />
+            <ProfileSwitcher />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md"

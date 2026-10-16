@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { AuthProvider } from '@/lib/auth-context';
+import { NotebookProvider } from '@/lib/notebook-context';
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
-  return <AuthProvider>{children}</AuthProvider>;
+  return <NotebookProvider>{children}</NotebookProvider>;
 }

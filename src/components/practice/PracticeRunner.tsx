@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   getVocabulary, 
   getTopics, 
@@ -9,6 +9,7 @@ import {
   subscribeToStorage 
 } from '@/lib/storage';
 import { VocabularyItem, Topic, Unit, QuizMode, QuizScope } from '@/types';
+import { useNotebook } from '@/lib/notebook-context';
 import { PracticeSetup } from './PracticeSetup';
 import { FlashcardRunner } from './FlashcardRunner';
 import { QuizMCQ } from './QuizMCQ';
@@ -20,6 +21,7 @@ import { QuizResult } from './QuizResult';
 type PracticeStage = 'setup' | 'running' | 'result';
 
 export function PracticeRunner() {
+  const { activeProfile } = useNotebook();
   const [words, setWords] = useState<VocabularyItem[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -40,22 +42,22 @@ export function PracticeRunner() {
     history: { word: VocabularyItem; correct: boolean; userAnswer?: string }[];
   } | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const [v, t, u] = await Promise.all([getVocabulary(), getTopics(), getUnits()]);
+      const [v, t, u] = await Promise.all([getVocabulary(activeProfile), getTopics(), getUnits()]);
       setWords(v);
       setTopics(t);
       setUnits(u);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeProfile]);
 
   useEffect(() => {
     loadData();
     const unsubscribe = subscribeToStorage(() => loadData());
     return () => unsubscribe();
-  }, []);
+  }, [loadData]);
 
   const handleStartPractice = (config: {
     mode: QuizMode;
@@ -84,6 +86,7 @@ export function PracticeRunner() {
     // Save attempt to database / local storage
     const scorePct = results.total > 0 ? (results.correctCount / results.total) * 100 : 0;
     await saveQuizAttempt({
+      profile_id: activeProfile,
       mode: activeMode,
       scope_type: activeScope,
       scope_id: activeScopeId,

@@ -1,18 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   BookOpen, 
   Sparkles, 
   Clock, 
   ArrowRight, 
-  CheckCircle2, 
-  Layers, 
   BookMarked,
-  ShieldCheck,
-  RotateCcw,
-  Volume2
+  ShieldCheck
 } from 'lucide-react';
 import { 
   getVocabulary, 
@@ -21,44 +17,45 @@ import {
 } from '@/lib/storage';
 import { VocabularyItem, QuizAttempt } from '@/types';
 import { isDueForReview, getTodayISO } from '@/lib/srs';
+import { useNotebook } from '@/lib/notebook-context';
 
 export default function HomePage() {
+  const { activeProfile, activeProfileName, profileNames } = useNotebook();
   const [words, setWords] = useState<VocabularyItem[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [todayISO, setTodayISO] = useState<string>('2026-10-16');
-  const [greeting, setGreeting] = useState<string>('Chào bạn!');
+  const [todayISO] = useState<string>(() => getTodayISO());
+  const [greeting] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'Chào bạn!';
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Chào buổi sáng!';
+    if (hour < 18) return 'Chào buổi chiều!';
+    return 'Chào buổi tối!';
+  });
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [v, qa] = await Promise.all([
-        getVocabulary(),
-        getQuizAttempts(),
+        getVocabulary(activeProfile),
+        getQuizAttempts(activeProfile),
       ]);
       setWords(v);
       setQuizAttempts(qa);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeProfile]);
 
   useEffect(() => {
     loadData();
-    setTodayISO(getTodayISO());
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting('Chào buổi sáng!');
-    else if (hour < 18) setGreeting('Chào buổi chiều!');
-    else setGreeting('Chào buổi tối!');
-
     const unsubscribe = subscribeToStorage(() => loadData());
     return () => unsubscribe();
-  }, []);
+  }, [loadData]);
 
   const totalWords = words.length;
   const wordsDueToday = words.filter((w) => isDueForReview(w, todayISO)).length;
   const unmemorizedWords = words.filter((w) => !w.is_memorized).length;
-  const needsReviewWords = words.filter((w) => w.needs_review || (w.incorrect_count && w.incorrect_count > 0)).length;
 
   const lastAttempt = quizAttempts[0];
 
@@ -83,10 +80,10 @@ export default function HomePage() {
           <span>Sổ học từ vựng TOEIC thông minh</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-          {greeting} Chúc bạn một buổi học tập hiệu quả.
+          {greeting} Chào mừng <span className="text-blue-600 font-extrabold">{activeProfileName}</span>.
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 max-w-xl">
-          Quản lý từ vựng TOEIC theo chủ đề, bài học và ngày học. Hệ thống Flashcard & Quiz Spaced Repetition giúp bạn ghi nhớ sâu và lâu dài.
+          Sổ từ vựng dùng chung giữa <strong>{profileNames.profile_a}</strong> & <strong>{profileNames.profile_b}</strong>. Cả hai cùng thêm từ, ghi chú và xây dựng kiến thức TOEIC mỗi ngày.
         </p>
       </div>
 
@@ -95,10 +92,10 @@ export default function HomePage() {
         <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
         <div className="text-xs text-blue-900 space-y-0.5">
           <p className="font-semibold">
-            Không gian học tập độc lập & Bảo mật trên thiết bị của bạn
+            Sổ từ vựng chung – Tiến độ nhớ từ & Quiz riêng biệt
           </p>
           <p className="text-blue-800 leading-relaxed">
-            Dữ liệu được lưu trữ trực tiếp trên trình duyệt của riêng bạn. Khi bạn bè truy cập cùng đường link, họ sẽ có không gian học tập riêng và không bao giờ ghi đè lên dữ liệu của bạn. Hãy định kỳ vào <strong>Cài đặt → Xuất dữ liệu JSON</strong> để sao lưu an toàn!
+            Hai bạn cùng xem chung danh sách từ, nghĩa và ghi chú. Khi bạn đánh dấu đã nhớ từ hoặc làm bài kiểm tra Quiz, kết quả được lưu riêng cho <strong>{activeProfileName}</strong> mà không ảnh hưởng tới tiến độ của bạn học.
           </p>
         </div>
       </div>

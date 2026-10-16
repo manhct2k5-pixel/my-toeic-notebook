@@ -11,18 +11,19 @@ import {
   CheckCircle2, 
   AlertCircle,
   Database,
-  Cloud,
-  CloudUpload,
+  Users,
+  Copy,
+  Check,
+  Share2,
   KeyRound,
-  ExternalLink,
-  Trash2
+  RefreshCw,
+  Plus
 } from 'lucide-react';
 import { 
   exportData, 
   importData, 
   exportCSV, 
-  resetToSampleData,
-  getLocalSnapshot
+  resetToSampleData
 } from '@/lib/storage';
 import { 
   isSupabaseConfigured, 
@@ -31,25 +32,44 @@ import {
   clearRuntimeSupabaseConfig,
   getSupabase
 } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth-context';
-import { MigrateModal } from '@/components/auth/MigrateModal';
-import { AuthModal } from '@/components/auth/AuthModal';
+import { useNotebook } from '@/lib/notebook-context';
+import { ShareLinkModal } from '@/components/notebook/ShareLinkModal';
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth();
+  const { 
+    activeProfile, 
+    profileNames, 
+    switchProfile, 
+    updateNames, 
+    token, 
+    shareUrl, 
+    createSharedNotebook
+  } = useNotebook();
+
   const [supabaseActive, setSupabaseActive] = useState(false);
   const [importStatus, setImportStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [resetStatus, setResetStatus] = useState(false);
-  const [migrateModalOpen, setMigrateModalOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Profile names editing state
+  const [nameA, setNameA] = useState(profileNames.profile_a);
+  const [nameB, setNameB] = useState(profileNames.profile_b);
+  const [savedProfilesMsg, setSavedProfilesMsg] = useState(false);
 
   // Runtime Supabase configuration form
   const [customUrl, setCustomUrl] = useState('');
   const [customKey, setCustomKey] = useState('');
   const [configStatus, setConfigStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  const localSnapshot = getLocalSnapshot();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setNameA(profileNames.profile_a);
+      setNameB(profileNames.profile_b);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [profileNames.profile_a, profileNames.profile_b]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -62,6 +82,25 @@ export default function SettingsPage() {
     }, 0);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleSaveProfiles = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nameA.trim() || !nameB.trim()) return;
+    await updateNames(nameA.trim(), nameB.trim());
+    setSavedProfilesMsg(true);
+    setTimeout(() => setSavedProfilesMsg(false), 2500);
+  };
+
+  const handleCopyLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      // Fallback
+    }
+  };
 
   const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,8 +126,7 @@ export default function SettingsPage() {
       const { error } = await client.from('vocabulary').select('id').limit(1);
       setTestingConnection(false);
 
-      if (error && !error.message.includes('relation') && !error.message.includes('does not exist')) {
-        // If error is about authentication or network
+      if (error && !error.message.includes('relation') && !error.message.includes('does not exist') && !error.message.includes('permission denied')) {
         if (error.code === 'PGRST301' || error.message.includes('JWT') || error.message.includes('apikey')) {
           setConfigStatus({ message: `Khóa API hoặc URL không đúng: ${error.message}`, isError: true });
           return;
@@ -97,10 +135,10 @@ export default function SettingsPage() {
 
       setSupabaseActive(true);
       setConfigStatus({
-        message: 'Kết nối Supabase thành công! Bạn có thể đăng nhập hoặc tạo tài khoản để đồng bộ.',
+        message: 'Kết nối Supabase thành công! Dữ liệu 2 hồ sơ sẽ được đồng bộ trực tuyến.',
         isError: false,
       });
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => window.location.reload(), 1200);
     } catch (err: unknown) {
       setTestingConnection(false);
       const errMsg = err instanceof Error ? err.message : 'Vui lòng kiểm tra lại URL và Anon Key';
@@ -128,7 +166,7 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `my_toeic_notebook_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `my_toeic_notebook_2profiles_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -150,18 +188,23 @@ export default function SettingsPage() {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const content = event.target?.result as string;
-      const res = await importData(content);
-      if (res.success) {
-        setImportStatus({
-          message: `Nhập thành công ${res.count} từ vựng vào sổ tay!`,
-          isError: false,
-        });
-      } else {
-        setImportStatus({
-          message: res.error || 'Có lỗi xảy ra khi nhập dữ liệu.',
-          isError: true,
-        });
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+        const res = await importData(parsed);
+        if (res.success) {
+          setImportStatus({
+            message: `Nhập thành công ${res.addedWords} từ vựng, ${res.addedTopics} chủ đề vào sổ tay!`,
+            isError: false,
+          });
+        } else {
+          setImportStatus({
+            message: res.error || 'Có lỗi xảy ra khi nhập dữ liệu.',
+            isError: true,
+          });
+        }
+      } catch {
+        setImportStatus({ message: 'File JSON không đúng định dạng', isError: true });
       }
       setTimeout(() => setImportStatus(null), 4000);
     };
@@ -170,8 +213,8 @@ export default function SettingsPage() {
   };
 
   const handleResetData = async () => {
-    if (confirm('Bạn có chắc muốn khôi phục về dữ liệu mẫu ban đầu? Tất cả từ đã lưu tự thêm sẽ được đưa về mẫu.')) {
-      await resetToSampleData();
+    if (confirm('Bạn có chắc muốn khôi phục về dữ liệu mẫu ban đầu? Tất cả từ vựng tự thêm sẽ bị đặt lại về mặc định.')) {
+      resetToSampleData();
       setResetStatus(true);
       setTimeout(() => setResetStatus(false), 3000);
     }
@@ -184,233 +227,304 @@ export default function SettingsPage() {
       <div className="space-y-1">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
           <Settings className="w-6 h-6 text-slate-700" />
-          <span>Cài đặt & Đồng bộ đám mây</span>
+          <span>Cài đặt & Sổ từ vựng 2 người học</span>
         </h1>
         <p className="text-xs sm:text-sm text-slate-500">
-          Quản lý tài khoản, đồng bộ Supabase Cloud, sao lưu JSON/CSV và khôi phục dữ liệu học tập.
+          Quản lý tên 2 hồ sơ, liên kết chia sẻ riêng, đồng bộ Supabase Cloud và sao lưu JSON/CSV.
         </p>
       </div>
 
-      {/* 1. Account & Cloud Status Card */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
+      {/* 1. 2-Profile Management Card */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              user ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
-            }`}>
-              <Cloud className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Users className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                {user ? 'Tài khoản người dùng Cloud' : 'Chưa đăng nhập'}
+                2 Hồ sơ cùng học từ vựng
               </h2>
               <p className="text-xs text-slate-500">
-                {user ? user.email : 'Đăng nhập để đồng bộ dữ liệu giữa máy tính và điện thoại'}
+                Sổ từ vựng dùng chung – Tiến độ nhớ từ & Quiz lưu riêng biệt
               </p>
             </div>
           </div>
 
-          <div>
-            {user ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 hidden sm:inline">Hồ sơ thiết bị này:</span>
+            <div className="flex items-center p-0.5 bg-slate-100 rounded-lg text-xs font-semibold">
               <button
-                onClick={() => signOut()}
-                className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-rose-600 transition-colors"
+                type="button"
+                onClick={() => switchProfile('profile_a')}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  activeProfile === 'profile_a' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                Đăng xuất
+                {profileNames.profile_a}
               </button>
-            ) : (
               <button
-                onClick={() => setAuthModalOpen(true)}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-semibold text-white shadow-xs transition-colors"
+                type="button"
+                onClick={() => switchProfile('profile_b')}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  activeProfile === 'profile_b' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                Đăng nhập ngay
+                {profileNames.profile_b}
               </button>
-            )}
-          </div>
-        </div>
-
-        {user && localSnapshot.totalWords > 0 && (
-          <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-            <div className="space-y-0.5">
-              <span className="font-bold text-blue-900 block">
-                Phát hiện {localSnapshot.totalWords} từ vựng trong bộ nhớ máy này
-              </span>
-              <p className="text-blue-700">
-                Bạn có thể chuyển toàn bộ từ vựng và ghi chú này vào tài khoản trực tuyến của mình.
-              </p>
             </div>
-            <button
-              onClick={() => setMigrateModalOpen(true)}
-              className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center gap-1.5 shrink-0 shadow-xs"
-            >
-              <CloudUpload className="w-3.5 h-3.5" />
-              <span>Chuyển vào tài khoản</span>
-            </button>
           </div>
-        )}
-      </div>
-
-      {/* 2. Supabase Configuration (Custom Project Connection) */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Database className="w-4 h-4 text-blue-600" />
-              <span>Cấu hình Supabase Cloud (PostgreSQL & RLS)</span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Kết nối dự án Supabase của bạn để kích hoạt cơ sở dữ liệu PostgreSQL trực tuyến và đăng nhập Google.
-            </p>
-          </div>
-          <a
-            href="https://supabase.com"
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium shrink-0"
-          >
-            <span>Tạo tài khoản Supabase</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
         </div>
 
-        {configStatus && (
-          <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-            configStatus.isError
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-          }`}>
-            {configStatus.isError ? (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            )}
-            <span>{configStatus.message}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSaveSupabaseConfig} className="space-y-3 pt-1">
+        {/* Rename form */}
+        <form onSubmit={handleSaveProfiles} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Project URL
+              Tên Hồ sơ 1 (Người A)
             </label>
             <input
               type="text"
-              value={customUrl}
-              onChange={(e) => setCustomUrl(e.target.value)}
-              placeholder="https://your-project-id.supabase.co"
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+              value={nameA}
+              onChange={(e) => setNameA(e.target.value)}
+              placeholder="Ví dụ: Nam, Minh..."
+              maxLength={25}
+              required
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Anon / Public API Key
+              Tên Hồ sơ 2 (Người B)
+            </label>
+            <input
+              type="text"
+              value={nameB}
+              onChange={(e) => setNameB(e.target.value)}
+              placeholder="Ví dụ: Lan, Mai..."
+              maxLength={25}
+              required
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div className="sm:col-span-2 flex items-center justify-between pt-1">
+            <span className="text-xs text-slate-500">
+              * Khi đổi tên, cả 2 bạn đều thấy tên mới được cập nhật trên website.
+            </span>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors"
+            >
+              <Check className="w-4 h-4" />
+              <span>Lưu tên hồ sơ</span>
+            </button>
+          </div>
+        </form>
+
+        {savedProfilesMsg && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Đã cập nhật tên hồ sơ thành công!</span>
+          </div>
+        )}
+      </div>
+
+      {/* 2. Capability Share Link Card */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Share2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Liên kết truy cập riêng (Không cần tài khoản)
+              </h2>
+              <p className="text-xs text-slate-500">
+                {token ? 'Hai bạn cùng truy cập bằng đường link này' : 'Chưa tạo mã liên kết'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors"
+          >
+            Quản lý link
+          </button>
+        </div>
+
+        {token ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={shareUrl}
+                className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-700 select-all focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl transition-all shadow-xs shrink-0 ${
+                  copiedLink ? 'bg-emerald-600 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedLink ? 'Đã sao chép' : 'Sao chép link'}</span>
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Bảo mật Capability-based URL</span>
+              </div>
+              <p>
+                Không yêu cầu đăng ký hay mật khẩu. Bất kỳ ai mở đường link trên đều xem và sửa được sổ từ vựng chung của 2 bạn. Nếu lỡ gửi link cho người ngoài, bạn có thể bấm <strong>Quản lý link</strong> để thu hồi và cấp lại link mới ngay lập tức.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-slate-50 rounded-xl flex items-center justify-between text-xs">
+            <span>Bạn chưa tạo link riêng để chia sẻ cùng bạn học.</span>
+            <button
+              type="button"
+              onClick={createSharedNotebook}
+              className="flex items-center gap-1.5 px-3 py-1.5 font-bold bg-blue-600 text-white rounded-lg shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tạo link ngay</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Supabase Cloud Configuration Card */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              supabaseActive ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+            }`}>
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Cơ sở dữ liệu Supabase (PostgreSQL Cloud)
+              </h2>
+              <p className="text-xs text-slate-500">
+                {supabaseActive ? 'Đang kết nối trực tuyến – Lưu và đồng bộ tự động' : 'Đang chạy ở chế độ ngoại tuyến (localStorage)'}
+              </p>
+            </div>
+          </div>
+
+          {supabaseActive && (
+            <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Đang kết nối</span>
+            </span>
+          )}
+        </div>
+
+        <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Supabase Project URL
+            </label>
+            <input
+              type="url"
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co"
+              className="w-full px-3 py-2 text-xs font-mono border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Supabase Anon Key (Public)
             </label>
             <input
               type="password"
               value={customKey}
               onChange={(e) => setCustomKey(e.target.value)}
               placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+              className="w-full px-3 py-2 text-xs font-mono border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Chỉ sử dụng Public Anon Key, không bao giờ nhập Service Role Key</span>
+          {configStatus && (
+            <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+              configStatus.isError ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}>
+              {configStatus.isError ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+              <span>{configStatus.message}</span>
             </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <span className="text-[11px] text-slate-400">
+              * Chỉ dùng Anon Public Key. Tuyệt đối không nhập Service Role Secret Key.
+            </span>
 
             <div className="flex items-center gap-2">
               {supabaseActive && (
                 <button
                   type="button"
                   onClick={handleClearSupabaseConfig}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-medium transition-colors flex items-center gap-1"
+                  className="px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Xóa cấu hình</span>
+                  Xóa cấu hình
                 </button>
               )}
-
               <button
                 type="submit"
-                disabled={testingConnection}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                disabled={testingConnection || !customUrl.trim() || !customKey.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-xl shadow-xs"
               >
-                {testingConnection ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Đang kiểm tra kết nối...</span>
-                  </>
-                ) : (
-                  <>
-                    <KeyRound className="w-3.5 h-3.5" />
-                    <span>Lưu & Kết nối Supabase</span>
-                  </>
-                )}
+                {testingConnection ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                <span>{testingConnection ? 'Đang kiểm tra...' : 'Lưu & Kiểm tra kết nối'}</span>
               </button>
             </div>
           </div>
         </form>
       </div>
 
-      {/* 3. Backup and Export Section */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">Sao lưu & Xuất dữ liệu</h2>
+      {/* 4. Backup & Restore Card */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-5">
+        <div className="border-b border-slate-100 pb-3">
+          <h2 className="text-base font-bold text-slate-900">Sao lưu & Khôi phục dữ liệu</h2>
           <p className="text-xs text-slate-500">
-            Tải bản sao lưu toàn bộ sổ từ vựng, bài tập và lịch sử kiểm tra về máy tính hoặc điện thoại.
+            Xuất file JSON sao lưu đầy đủ 2 hồ sơ, xuất bảng tính Excel/CSV, hoặc nhập lại dữ liệu cũ.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={handleExportJSON}
-            className="flex items-center justify-center gap-2 p-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold transition-colors"
+            className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/30 transition-all text-center group"
           >
-            <Download className="w-4 h-4 text-blue-600" />
-            <span>Xuất toàn bộ dữ liệu (JSON)</span>
+            <Download className="w-5 h-5 text-blue-600 mb-2 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold text-slate-800">Tải file JSON dự phòng</span>
+            <span className="text-[11px] text-slate-500 mt-0.5">Sổ từ vựng & 2 tiến độ</span>
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center justify-center gap-2 p-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold transition-colors"
+            className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/30 transition-all text-center group"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>Xuất danh sách từ vựng (CSV)</span>
+            <FileSpreadsheet className="w-5 h-5 text-emerald-600 mb-2 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold text-slate-800">Xuất file CSV (Excel)</span>
+            <span className="text-[11px] text-slate-500 mt-0.5">Mở bằng Excel / Sheets</span>
           </button>
-        </div>
-      </div>
 
-      {/* 4. Import Section */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">Nhập dữ liệu từ bản sao lưu</h2>
-          <p className="text-xs text-slate-500">
-            Khôi phục từ tệp JSON đã xuất trước đó. Dữ liệu sẽ được hợp nhất thông minh, không ghi đè dữ liệu trùng ngoài ý muốn.
-          </p>
-        </div>
-
-        {importStatus && (
-          <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-            importStatus.isError
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-          }`}>
-            {importStatus.isError ? (
-              <AlertCircle className="w-4 h-4 text-rose-600" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            )}
-            <span>{importStatus.message}</span>
-          </div>
-        )}
-
-        <div>
-          <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold cursor-pointer transition-colors">
-            <Upload className="w-4 h-4" />
-            <span>Chọn tệp JSON để nhập</span>
+          <label className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/30 transition-all text-center cursor-pointer group">
+            <Upload className="w-5 h-5 text-indigo-600 mb-2 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold text-slate-800">Nhập dữ liệu từ file JSON</span>
+            <span className="text-[11px] text-slate-500 mt-0.5">Khôi phục từ bản sao lưu</span>
             <input
               type="file"
               accept=".json"
@@ -419,44 +533,44 @@ export default function SettingsPage() {
             />
           </label>
         </div>
-      </div>
 
-      {/* 5. Reset to Sample Data */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">Dữ liệu mẫu ban đầu</h2>
-          <p className="text-xs text-slate-500">
-            Đặt lại hệ thống về bộ từ vựng mẫu ban đầu (Office & Work, Finance, Contracts, Marketing).
-          </p>
-        </div>
-
-        {resetStatus && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Đã khôi phục dữ liệu mẫu ban đầu thành công!</span>
+        {importStatus && (
+          <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+            importStatus.isError ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          }`}>
+            {importStatus.isError ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+            <span>{importStatus.message}</span>
           </div>
         )}
 
-        <div>
+        {/* Danger Zone: Reset to sample */}
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div>
+            <span className="font-semibold text-slate-700 block">Đặt lại dữ liệu mẫu</span>
+            <span className="text-slate-400">Khôi phục danh sách từ vựng TOEIC mẫu ban đầu</span>
+          </div>
+
           <button
             onClick={handleResetData}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors"
           >
-            <RotateCcw className="w-4 h-4 text-slate-500" />
-            <span>Khôi phục dữ liệu mẫu</span>
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Đặt lại mẫu</span>
           </button>
         </div>
+
+        {resetStatus && (
+          <p className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Đã khôi phục về dữ liệu mẫu ban đầu thành công!</span>
+          </p>
+        )}
       </div>
 
-      {/* Modals */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-      />
-
-      <MigrateModal
-        isOpen={migrateModalOpen}
-        onClose={() => setMigrateModalOpen(false)}
+      {/* Share Link Modal */}
+      <ShareLinkModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
       />
 
     </div>

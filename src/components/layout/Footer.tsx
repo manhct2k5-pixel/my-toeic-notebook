@@ -10,13 +10,13 @@ export function Footer() {
           <BookOpen className="w-4 h-4 text-slate-400" />
           <span className="font-medium text-slate-700">My TOEIC Notebook</span>
           <span className="text-slate-300">|</span>
-          <span>Sổ tay học từ vựng, Listening & Reading TOEIC cá nhân</span>
+          <span>Sổ tay học từ vựng TOEIC dùng chung cho 2 người</span>
         </div>
         
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1 text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            Bảo mật ghi chú cá nhân
+            Bảo mật liên kết riêng & Không cần tài khoản
           </span>
           <Link href="/settings" className="hover:text-blue-600 transition-colors">
             Sao lưu dữ liệu

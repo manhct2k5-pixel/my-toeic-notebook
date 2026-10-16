@@ -18,8 +18,10 @@ import { WordModal } from './WordModal';
 import { TopicModal } from './TopicModal';
 import { UnitModal } from './UnitModal';
 import { ArrowLeft, BookOpen, Layers, Tag, Menu } from 'lucide-react';
+import { useNotebook } from '@/lib/notebook-context';
 
 export function NotebookView() {
+  const { activeProfile } = useNotebook();
   const [words, setWords] = useState<VocabularyItem[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -46,7 +48,7 @@ export function NotebookView() {
   // Load data function
   const loadData = async () => {
     try {
-      const [v, t, u] = await Promise.all([getVocabulary(), getTopics(), getUnits()]);
+      const [v, t, u] = await Promise.all([getVocabulary(activeProfile), getTopics(), getUnits()]);
       setWords(v);
       setTopics(t);
       setUnits(u);
@@ -78,7 +80,7 @@ export function NotebookView() {
       loadData();
     });
     return () => unsubscribe();
-  }, []);
+  }, [activeProfile]);
 
   // Filter words according to current active viewType
   const displayedWords = useMemo(() => {
