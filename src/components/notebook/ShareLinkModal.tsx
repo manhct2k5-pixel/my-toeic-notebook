@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   Copy, 
@@ -31,6 +32,7 @@ export function ShareLinkModal({ isOpen, onClose }: ShareLinkModalProps) {
     rotateLink 
   } = useNotebook();
 
+  const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [manualToken, setManualToken] = useState('');
@@ -39,7 +41,26 @@ export function ShareLinkModal({ isOpen, onClose }: ShareLinkModalProps) {
   const [showRotateConfirm, setShowRotateConfirm] = useState(false);
   const [rotateSuccess, setRotateSuccess] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Handle ESC key and prevent body scroll when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !mounted) return null;
 
   const handleCopy = async () => {
     if (!shareUrl) return;
@@ -117,35 +138,40 @@ export function ShareLinkModal({ isOpen, onClose }: ShareLinkModalProps) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-6 bg-slate-900/35 backdrop-blur-[2px] flex min-h-full items-center justify-center animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div 
-        className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+        className="w-full max-w-lg my-auto max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        {/* Pinned Header */}
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
               <Share2 className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">Liên kết dùng chung cho 2 người</h3>
               <p className="text-xs text-slate-500">
-                {profileNames.profile_a} & {profileNames.profile_b}
+                {profileNames.profile_a} &amp; {profileNames.profile_b}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg transition-colors"
+            title="Đóng (Esc)"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        {/* Scrollable Body */}
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
           {token ? (
             <>
               {/* Link Box */}
@@ -331,6 +357,7 @@ export function ShareLinkModal({ isOpen, onClose }: ShareLinkModalProps) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

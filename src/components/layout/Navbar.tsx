@@ -25,19 +25,20 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-sm transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-15 items-center justify-between">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex h-14 sm:h-16 items-center justify-between gap-2">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 text-slate-900 group">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:bg-blue-700 transition-colors">
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 text-slate-900 group shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:bg-blue-700 transition-colors shrink-0">
               <BookOpen className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-base tracking-tight text-slate-900 leading-none">
-                My TOEIC Notebook
+              <span className="font-semibold text-sm sm:text-base tracking-tight text-slate-900 leading-none">
+                <span className="inline sm:hidden">TOEIC Note</span>
+                <span className="hidden sm:inline">My TOEIC Notebook</span>
               </span>
-              <span className="text-[11px] text-slate-500 font-medium">Sổ từ vựng 2 người học</span>
+              <span className="hidden md:inline text-[11px] text-slate-500 font-medium mt-0.5">Sổ từ vựng 2 người học</span>
             </div>
           </Link>
 
@@ -77,11 +78,11 @@ export function Navbar() {
           </div>
 
           {/* Mobile Actions */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-1 sm:gap-2 md:hidden shrink-0">
             <ProfileSwitcher />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md"
+              className="p-1.5 sm:p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md"
               aria-label="Toggle menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
