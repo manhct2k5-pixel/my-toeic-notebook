@@ -8,27 +8,119 @@ import {
   FileSpreadsheet, 
   RotateCcw, 
   ShieldCheck, 
-  HardDrive, 
   CheckCircle2, 
   AlertCircle,
-  Database
+  Database,
+  Cloud,
+  CloudUpload,
+  KeyRound,
+  ExternalLink,
+  Trash2
 } from 'lucide-react';
 import { 
   exportData, 
   importData, 
   exportCSV, 
-  resetToSampleData 
+  resetToSampleData,
+  getLocalSnapshot
 } from '@/lib/storage';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { 
+  isSupabaseConfigured, 
+  getEffectiveSupabaseConfig, 
+  saveRuntimeSupabaseConfig, 
+  clearRuntimeSupabaseConfig,
+  getSupabase
+} from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
+import { MigrateModal } from '@/components/auth/MigrateModal';
+import { AuthModal } from '@/components/auth/AuthModal';
 
 export default function SettingsPage() {
+  const { user, signOut } = useAuth();
   const [supabaseActive, setSupabaseActive] = useState(false);
   const [importStatus, setImportStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [resetStatus, setResetStatus] = useState(false);
+  const [migrateModalOpen, setMigrateModalOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  // Runtime Supabase configuration form
+  const [customUrl, setCustomUrl] = useState('');
+  const [customKey, setCustomKey] = useState('');
+  const [configStatus, setConfigStatus] = useState<{ message: string; isError: boolean } | null>(null);
+  const [testingConnection, setTestingConnection] = useState(false);
+
+  const localSnapshot = getLocalSnapshot();
 
   useEffect(() => {
-    setSupabaseActive(isSupabaseConfigured());
+    const timer = setTimeout(() => {
+      setSupabaseActive(isSupabaseConfigured());
+      const cfg = getEffectiveSupabaseConfig();
+      if (cfg) {
+        setCustomUrl(cfg.url);
+        setCustomKey(cfg.key);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
+
+  const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customUrl.trim() || !customKey.trim()) {
+      setConfigStatus({ message: 'Vui lòng nhập đầy đủ URL và Anon Key', isError: true });
+      return;
+    }
+
+    if (!customUrl.startsWith('https://')) {
+      setConfigStatus({ message: 'Supabase URL phải bắt đầu bằng https://', isError: true });
+      return;
+    }
+
+    setTestingConnection(true);
+    setConfigStatus(null);
+
+    try {
+      saveRuntimeSupabaseConfig(customUrl, customKey);
+      const client = getSupabase();
+      if (!client) throw new Error('Không thể khởi tạo client');
+
+      // Test simple ping query
+      const { error } = await client.from('vocabulary').select('id').limit(1);
+      setTestingConnection(false);
+
+      if (error && !error.message.includes('relation') && !error.message.includes('does not exist')) {
+        // If error is about authentication or network
+        if (error.code === 'PGRST301' || error.message.includes('JWT') || error.message.includes('apikey')) {
+          setConfigStatus({ message: `Khóa API hoặc URL không đúng: ${error.message}`, isError: true });
+          return;
+        }
+      }
+
+      setSupabaseActive(true);
+      setConfigStatus({
+        message: 'Kết nối Supabase thành công! Bạn có thể đăng nhập hoặc tạo tài khoản để đồng bộ.',
+        isError: false,
+      });
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: unknown) {
+      setTestingConnection(false);
+      const errMsg = err instanceof Error ? err.message : 'Vui lòng kiểm tra lại URL và Anon Key';
+      setConfigStatus({
+        message: `Lỗi kết nối: ${errMsg}`,
+        isError: true,
+      });
+    }
+  };
+
+  const handleClearSupabaseConfig = () => {
+    if (confirm('Bạn có chắc muốn xóa cấu hình Supabase đã lưu trên trình duyệt này?')) {
+      clearRuntimeSupabaseConfig();
+      setCustomUrl('');
+      setCustomKey('');
+      setSupabaseActive(false);
+      setConfigStatus({ message: 'Đã xóa cấu hình Supabase.', isError: false });
+      setTimeout(() => window.location.reload(), 1000);
+    }
+  };
 
   const handleExportJSON = async () => {
     const data = await exportData();
@@ -92,47 +184,183 @@ export default function SettingsPage() {
       <div className="space-y-1">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
           <Settings className="w-6 h-6 text-slate-700" />
-          <span>Cài đặt & Sao lưu dữ liệu</span>
+          <span>Cài đặt & Đồng bộ đám mây</span>
         </h1>
         <p className="text-xs sm:text-sm text-slate-500">
-          Quản lý trạng thái lưu trữ, sao lưu JSON/CSV và khôi phục dữ liệu học tập cá nhân.
+          Quản lý tài khoản, đồng bộ Supabase Cloud, sao lưu JSON/CSV và khôi phục dữ liệu học tập.
         </p>
       </div>
 
-      {/* Storage Mode Notice */}
-      <div className="p-5 rounded-2xl border bg-amber-50/80 border-amber-200 text-amber-950 space-y-3">
-        <div className="flex items-start gap-3">
-          <HardDrive className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-          <div className="space-y-1 text-xs sm:text-sm">
-            <h3 className="font-bold text-amber-900">
-              Lưu trữ độc lập trên từng thiết bị (Local-First Storage)
-            </h3>
-            <p className="text-xs text-amber-900 leading-relaxed">
-              Website hoạt động hoàn toàn độc lập trên từng trình duyệt. Khi bạn chia sẻ link cho bạn bè, <strong>mỗi người sẽ có cuốn sổ tay riêng biệt và không bao giờ bị ghi đè dữ liệu của nhau</strong>.
-            </p>
+      {/* 1. Account & Cloud Status Card */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              user ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+            }`}>
+              <Cloud className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                {user ? 'Tài khoản người dùng Cloud' : 'Chưa đăng nhập'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {user ? user.email : 'Đăng nhập để đồng bộ dữ liệu giữa máy tính và điện thoại'}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            {user ? (
+              <button
+                onClick={() => signOut()}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-rose-600 transition-colors"
+              >
+                Đăng xuất
+              </button>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-semibold text-white shadow-xs transition-colors"
+              >
+                Đăng nhập ngay
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="p-3 bg-white/80 rounded-xl border border-amber-200/80 text-xs text-amber-900 space-y-1">
-          <p className="font-semibold text-rose-700 flex items-center gap-1.5">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            Lưu ý bảo quản ghi chú:
-          </p>
-          <ul className="list-disc pl-5 space-y-0.5 text-slate-700">
-            <li>Tải lại trang (F5) hoặc đóng tab <strong>không làm mất dữ liệu</strong>.</li>
-            <li>Hạn chế dùng chế độ Ẩn danh (Incognito) vì trình duyệt sẽ tự xóa dữ liệu khi đóng cửa sổ.</li>
-            <li>Nếu bạn thực hiện thao tác &quot;Xóa dữ liệu duyệt web/Cookies/Storage&quot; trên trình duyệt, các ghi chú có thể bị mất.</li>
-            <li><strong>Khuyến nghị:</strong> Hãy thường xuyên nhấn <em>&quot;Xuất toàn bộ dữ liệu (JSON)&quot;</em> bên dưới để lưu file sao lưu về máy tính!</li>
-          </ul>
-        </div>
+        {user && localSnapshot.totalWords > 0 && (
+          <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="space-y-0.5">
+              <span className="font-bold text-blue-900 block">
+                Phát hiện {localSnapshot.totalWords} từ vựng trong bộ nhớ máy này
+              </span>
+              <p className="text-blue-700">
+                Bạn có thể chuyển toàn bộ từ vựng và ghi chú này vào tài khoản trực tuyến của mình.
+              </p>
+            </div>
+            <button
+              onClick={() => setMigrateModalOpen(true)}
+              className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center gap-1.5 shrink-0 shadow-xs"
+            >
+              <CloudUpload className="w-3.5 h-3.5" />
+              <span>Chuyển vào tài khoản</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Backup and Export Section */}
+      {/* 2. Supabase Configuration (Custom Project Connection) */}
+      <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Database className="w-4 h-4 text-blue-600" />
+              <span>Cấu hình Supabase Cloud (PostgreSQL & RLS)</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Kết nối dự án Supabase của bạn để kích hoạt cơ sở dữ liệu PostgreSQL trực tuyến và đăng nhập Google.
+            </p>
+          </div>
+          <a
+            href="https://supabase.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium shrink-0"
+          >
+            <span>Tạo tài khoản Supabase</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+
+        {configStatus && (
+          <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+            configStatus.isError
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}>
+            {configStatus.isError ? (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            )}
+            <span>{configStatus.message}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveSupabaseConfig} className="space-y-3 pt-1">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Project URL
+            </label>
+            <input
+              type="text"
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              placeholder="https://your-project-id.supabase.co"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Anon / Public API Key
+            </label>
+            <input
+              type="password"
+              value={customKey}
+              onChange={(e) => setCustomKey(e.target.value)}
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Chỉ sử dụng Public Anon Key, không bao giờ nhập Service Role Key</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {supabaseActive && (
+                <button
+                  type="button"
+                  onClick={handleClearSupabaseConfig}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-medium transition-colors flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa cấu hình</span>
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={testingConnection}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {testingConnection ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Đang kiểm tra kết nối...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Lưu & Kết nối Supabase</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* 3. Backup and Export Section */}
       <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div>
           <h2 className="text-base font-bold text-slate-900">Sao lưu & Xuất dữ liệu</h2>
           <p className="text-xs text-slate-500">
-            Tải bản sao lưu toàn bộ sổ từ vựng, bài tập và lịch sử kiểm tra để tránh mất dữ liệu.
+            Tải bản sao lưu toàn bộ sổ từ vựng, bài tập và lịch sử kiểm tra về máy tính hoặc điện thoại.
           </p>
         </div>
 
@@ -155,7 +383,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Import Section */}
+      {/* 4. Import Section */}
       <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div>
           <h2 className="text-base font-bold text-slate-900">Nhập dữ liệu từ bản sao lưu</h2>
@@ -193,12 +421,12 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Reset to Sample Data */}
+      {/* 5. Reset to Sample Data */}
       <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <div>
           <h2 className="text-base font-bold text-slate-900">Dữ liệu mẫu ban đầu</h2>
           <p className="text-xs text-slate-500">
-            Đặt lại hệ thống về bộ từ vựng và bài học mẫu ban đầu (Office & Work, Finance, Contracts, Marketing).
+            Đặt lại hệ thống về bộ từ vựng mẫu ban đầu (Office & Work, Finance, Contracts, Marketing).
           </p>
         </div>
 
@@ -219,6 +447,17 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* Modals */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
+
+      <MigrateModal
+        isOpen={migrateModalOpen}
+        onClose={() => setMigrateModalOpen(false)}
+      />
 
     </div>
   );

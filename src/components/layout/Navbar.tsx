@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -9,19 +9,13 @@ import {
   Sparkles, 
   Settings, 
   Menu, 
-  X,
-  HardDrive
+  X
 } from 'lucide-react';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 export function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [supabaseActive, setSupabaseActive] = useState(false);
-
-  useEffect(() => {
-    setSupabaseActive(isSupabaseConfigured());
-  }, []);
 
   const navLinks = [
     { href: '/', label: 'Trang chủ', icon: Sparkles },
@@ -36,7 +30,7 @@ export function Navbar() {
           
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 text-slate-900 group">
-            <div className="w-8 h-8 rounded-lg bg-navy-900 bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:bg-blue-700 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:bg-blue-700 transition-colors">
               <BookOpen className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
@@ -69,21 +63,9 @@ export function Navbar() {
             })}
           </nav>
 
-          {/* Right Status & Settings */}
+          {/* Right Status & User Menu */}
           <div className="hidden md:flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200/80" title={supabaseActive ? "Dữ liệu kết nối Supabase Cloud" : "Dữ liệu được lưu trong trình duyệt (LocalStorage/IndexedDB)"}>
-              {supabaseActive ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Cloud Sync</span>
-                </>
-              ) : (
-                <>
-                  <HardDrive className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Lưu cục bộ</span>
-                </>
-              )}
-            </div>
+            <UserMenu />
 
             <Link
               href="/settings"
@@ -94,14 +76,9 @@ export function Navbar() {
             </Link>
           </div>
 
-          {/* Mobile hamburger button */}
+          {/* Mobile Actions */}
           <div className="flex items-center gap-2 md:hidden">
-            <Link
-              href="/settings"
-              className="p-1.5 text-slate-500 hover:text-slate-900 rounded-md"
-            >
-              <Settings className="w-4 h-4" />
-            </Link>
+            <UserMenu />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md"
@@ -136,11 +113,15 @@ export function Navbar() {
               </Link>
             );
           })}
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 px-3">
-            <span>Trạng thái lưu trữ:</span>
-            <span className="font-medium text-slate-700">
-              {supabaseActive ? 'Supabase Cloud' : 'Cục bộ thiết bị (Local)'}
-            </span>
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs px-3">
+            <Link
+              href="/settings"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 py-1"
+            >
+              <Settings className="w-4 h-4 text-slate-500" />
+              <span>Cài đặt & Sao lưu</span>
+            </Link>
           </div>
         </div>
       )}

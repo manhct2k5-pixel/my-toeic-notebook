@@ -21,7 +21,8 @@ export function calculateNextReview(
   isMemorized: boolean;
   needsReview: boolean;
 } {
-  let { repetitions, ease_factor, review_interval_days } = item;
+  const { ease_factor } = item;
+  let { repetitions, review_interval_days } = item;
   let easeFactor = ease_factor;
   
   if (!easeFactor || easeFactor < 1.3) easeFactor = 2.5;

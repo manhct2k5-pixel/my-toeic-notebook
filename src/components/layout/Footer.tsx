@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { BookOpen, ShieldCheck, HardDrive } from 'lucide-react';
+import { BookOpen, ShieldCheck } from 'lucide-react';
 
 export function Footer() {
   return (

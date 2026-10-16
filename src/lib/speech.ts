@@ -41,7 +41,7 @@ export interface PlayAudioOptions {
   rate?: number; // 0.75 | 1.0
   onStart?: () => void;
   onEnd?: () => void;
-  onError?: (err?: any) => void;
+  onError?: (err?: unknown) => void;
 }
 
 export async function playAudioOrSpeak(
@@ -58,7 +58,7 @@ export async function playAudioOrSpeak(
   let rate: number = 1.0;
   let onStart: (() => void) | undefined;
   let onEnd: (() => void) | undefined;
-  let onError: ((err?: any) => void) | undefined;
+  let onError: ((err?: unknown) => void) | undefined;
 
   if (typeof arg1 === 'object') {
     text = arg1.text;
@@ -187,7 +187,7 @@ function speakWithBrowser(
   rate: number,
   onStart?: () => void,
   onEnd?: () => void,
-  onError?: (err?: any) => void
+  onError?: (err?: unknown) => void
 ): Promise<boolean> {
   return new Promise((resolve) => {
     if (!isSpeechSupported()) {

@@ -11,13 +11,9 @@ import {
   Tag, 
   Layers, 
   Calendar, 
-  Sparkles,
-  ExternalLink,
-  Save,
   Bold,
   Italic,
   List,
-  Quote,
   Lightbulb
 } from 'lucide-react';
 import { VocabularyItem, Topic, Unit } from '@/types';
@@ -44,9 +40,11 @@ export function WordDetail({
   onFilterByUnit,
 }: WordDetailProps) {
   const [noteContent, setNoteContent] = useState('');
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle' | 'error'>('idle');
   const [editingDate, setEditingDate] = useState(false);
   const [dateValue, setDateValue] = useState('');
+  const [audioSpeed, setAudioSpeed] = useState<number>(1.0);
+  const [playingKey, setPlayingKey] = useState<string | null>(null);
   const noteDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   const topicMap = React.useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
@@ -55,12 +53,15 @@ export function WordDetail({
   // Synchronize noteContent when word changes
   useEffect(() => {
     if (word) {
-      setNoteContent(word.notes || '');
-      setDateValue(word.study_date || '');
-      setSaveStatus('idle');
-      setEditingDate(false);
+      const timer = setTimeout(() => {
+        setNoteContent(word.notes || '');
+        setDateValue(word.study_date || '');
+        setSaveStatus('idle');
+        setEditingDate(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [word?.id, word?.notes, word?.study_date]);
+  }, [word]);
 
   if (!word) {
     return (
@@ -88,11 +89,28 @@ export function WordDetail({
 
     noteDebounceTimer.current = setTimeout(async () => {
       if (word) {
-        await updateWordNotes(word.id, newVal);
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2500);
+        try {
+          await updateWordNotes(word.id, newVal);
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 2500);
+        } catch {
+          setSaveStatus('error');
+        }
       }
     }, 700);
+  };
+
+  const handleManualRetrySave = async () => {
+    if (word) {
+      setSaveStatus('saving');
+      try {
+        await updateWordNotes(word.id, noteContent);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2500);
+      } catch {
+        setSaveStatus('error');
+      }
+    }
   };
 
   const insertMarkdown = (prefix: string, suffix: string = '') => {
@@ -110,9 +128,13 @@ export function WordDetail({
     
     if (noteDebounceTimer.current) clearTimeout(noteDebounceTimer.current);
     noteDebounceTimer.current = setTimeout(async () => {
-      await updateWordNotes(word.id, newContent);
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2500);
+      try {
+        await updateWordNotes(word.id, newContent);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2500);
+      } catch {
+        setSaveStatus('error');
+      }
     }, 500);
 
     setTimeout(() => {
@@ -120,9 +142,6 @@ export function WordDetail({
       textarea.setSelectionRange(start + prefix.length, start + prefix.length + (selected ? selected.length : 7));
     }, 50);
   };
-
-  const [audioSpeed, setAudioSpeed] = useState<number>(1.0);
-  const [playingKey, setPlayingKey] = useState<string | null>(null);
 
   const handleAudio = (accent: 'uk' | 'us') => {
     const key = `word-${accent}`;
@@ -381,6 +400,16 @@ export function WordDetail({
               )}
               {saveStatus === 'saved' && (
                 <span className="text-[11px] text-emerald-600 font-medium">✓ Đã tự động lưu</span>
+              )}
+              {saveStatus === 'error' && (
+                <button
+                  type="button"
+                  onClick={handleManualRetrySave}
+                  className="text-[11px] text-rose-600 font-semibold flex items-center gap-1 hover:underline"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Không thể lưu – Thử lại</span>
+                </button>
               )}
             </div>
           </div>
