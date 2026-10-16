@@ -5,6 +5,7 @@ const repoName = 'my-toeic-notebook';
 
 const nextConfig: NextConfig = {
   output: 'export',
+  trailingSlash: true,
   basePath: isGithubPages ? `/${repoName}` : '',
   assetPrefix: isGithubPages ? `/${repoName}/` : undefined,
   images: {
