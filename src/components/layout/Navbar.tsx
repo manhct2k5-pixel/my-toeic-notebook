@@ -4,16 +4,13 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
-  BookMarked, 
-  Headphones, 
   FileText, 
   BookOpen, 
   Sparkles, 
   Settings, 
   Menu, 
   X,
-  HardDrive,
-  CloudCheck
+  HardDrive
 } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
@@ -28,10 +25,8 @@ export function Navbar() {
 
   const navLinks = [
     { href: '/', label: 'Trang chủ', icon: Sparkles },
-    { href: '/listening', label: 'Listening', icon: Headphones },
     { href: '/reading', label: 'Reading', icon: FileText },
     { href: '/notebook', label: 'My Notebook', icon: BookOpen },
-    { href: '/practice', label: 'Ôn tập & Quiz', icon: BookMarked },
   ];
 
   return (

@@ -210,7 +210,7 @@ export function SaveWordModal({
           {contextSentence && (
             <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1">
               <span className="font-semibold text-slate-500 text-[10px] uppercase block">
-                Câu gốc trong bài {sourceType === 'listening' ? 'Listening' : 'Reading'}:
+                Câu gốc trong bài Reading:
               </span>
               <p className="text-slate-800 italic">&quot;{contextSentence}&quot;</p>
               <p className="text-[11px] text-blue-600 font-medium">Nguồn: {sourceLessonTitle}</p>

@@ -100,30 +100,30 @@ export default function SettingsPage() {
       </div>
 
       {/* Storage Mode Notice */}
-      <div className={`p-5 rounded-2xl border ${
-        supabaseActive
-          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-          : 'bg-amber-50/70 border-amber-200 text-amber-900'
-      }`}>
+      <div className="p-5 rounded-2xl border bg-amber-50/80 border-amber-200 text-amber-950 space-y-3">
         <div className="flex items-start gap-3">
-          {supabaseActive ? (
-            <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
-          ) : (
-            <HardDrive className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-          )}
-
+          <HardDrive className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
           <div className="space-y-1 text-xs sm:text-sm">
-            <h3 className="font-bold">
-              {supabaseActive
-                ? 'Đã kích hoạt lưu trữ Supabase Cloud'
-                : 'Chế độ lưu trữ cục bộ (Offline / Local Storage)'}
+            <h3 className="font-bold text-amber-900">
+              Lưu trữ độc lập trên từng thiết bị (Local-First Storage)
             </h3>
-            <p className="text-xs opacity-90 leading-relaxed">
-              {supabaseActive
-                ? 'Website đã được cấu hình với Supabase PostgreSQL và Authentication. Dữ liệu ghi chép được bảo mật theo người dùng với Row Level Security (RLS).'
-                : 'Website đang chạy ở chế độ cục bộ trên thiết bị của bạn (sử dụng LocalStorage/IndexedDB). Dữ liệu hoàn toàn riêng tư và không bị mất khi tải lại trang, nhưng chỉ nằm trên trình duyệt này. Để đồng bộ đa thiết bị, bạn có thể điền thông tin Supabase trong tệp .env.'}
+            <p className="text-xs text-amber-900 leading-relaxed">
+              Website hoạt động hoàn toàn độc lập trên từng trình duyệt. Khi bạn chia sẻ link cho bạn bè, <strong>mỗi người sẽ có cuốn sổ tay riêng biệt và không bao giờ bị ghi đè dữ liệu của nhau</strong>.
             </p>
           </div>
+        </div>
+
+        <div className="p-3 bg-white/80 rounded-xl border border-amber-200/80 text-xs text-amber-900 space-y-1">
+          <p className="font-semibold text-rose-700 flex items-center gap-1.5">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            Lưu ý bảo quản ghi chú:
+          </p>
+          <ul className="list-disc pl-5 space-y-0.5 text-slate-700">
+            <li>Tải lại trang (F5) hoặc đóng tab <strong>không làm mất dữ liệu</strong>.</li>
+            <li>Hạn chế dùng chế độ Ẩn danh (Incognito) vì trình duyệt sẽ tự xóa dữ liệu khi đóng cửa sổ.</li>
+            <li>Nếu bạn thực hiện thao tác &quot;Xóa dữ liệu duyệt web/Cookies/Storage&quot; trên trình duyệt, các ghi chú có thể bị mất.</li>
+            <li><strong>Khuyến nghị:</strong> Hãy thường xuyên nhấn <em>&quot;Xuất toàn bộ dữ liệu (JSON)&quot;</em> bên dưới để lưu file sao lưu về máy tính!</li>
+          </ul>
         </div>
       </div>
 

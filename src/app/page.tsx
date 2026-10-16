@@ -5,51 +5,48 @@ import Link from 'next/link';
 import { 
   BookOpen, 
   Sparkles, 
-  Headphones, 
   FileText, 
   Clock, 
   ArrowRight, 
   CheckCircle2, 
   Layers, 
   Bookmark,
-  Calendar
+  Calendar,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   getVocabulary, 
-  getListeningLessons, 
   getReadingLessons, 
   getLessonAttempts,
   subscribeToStorage 
 } from '@/lib/storage';
-import { VocabularyItem, ListeningLesson, ReadingLesson, LessonAttempt } from '@/types';
+import { VocabularyItem, ReadingLesson, LessonAttempt } from '@/types';
 import { isDueForReview, getTodayISO } from '@/lib/srs';
 
 export default function HomePage() {
   const [words, setWords] = useState<VocabularyItem[]>([]);
-  const [listeningLessons, setListeningLessons] = useState<ListeningLesson[]>([]);
   const [readingLessons, setReadingLessons] = useState<ReadingLesson[]>([]);
   const [recentAttempts, setRecentAttempts] = useState<LessonAttempt[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [todayISO, setTodayISO] = useState<string>('2026-10-16');
+  const [greeting, setGreeting] = useState<string>('Chào bạn!');
+
   const loadData = async () => {
     try {
-      const [v, ll, rl, la] = await Promise.all([
+      const [v, rl, la] = await Promise.all([
         getVocabulary(),
-        getListeningLessons(),
         getReadingLessons(),
         getLessonAttempts(),
       ]);
       setWords(v);
-      setListeningLessons(ll);
       setReadingLessons(rl);
       setRecentAttempts(la);
     } finally {
       setLoading(false);
     }
   };
-
-  const [todayISO, setTodayISO] = useState<string>('2026-10-16');
-  const [greeting, setGreeting] = useState<string>('Chào bạn!');
 
   useEffect(() => {
     loadData();
@@ -67,21 +64,18 @@ export default function HomePage() {
   const wordsDueToday = words.filter((w) => isDueForReview(w, todayISO)).length;
   const unmemorizedWords = words.filter((w) => !w.is_memorized).length;
 
-  // Find ongoing lesson (last attempt or first listening lesson)
+  // Find ongoing lesson (last attempt or first reading lesson)
   const lastAttempt = recentAttempts[0];
-  let ongoingLessonTitle = 'TOEIC Listening – Part 2: Question – Response';
-  let ongoingLessonHref = '/listening';
+  let ongoingLessonTitle = 'TOEIC Reading – Part 7: Reading Comprehension';
+  let ongoingLessonHref = '/reading';
 
   if (lastAttempt) {
-    if (lastAttempt.lesson_type === 'listening') {
-      const l = listeningLessons.find((item) => item.id === lastAttempt.lesson_id);
-      ongoingLessonTitle = l ? l.title : 'TOEIC Listening';
-      ongoingLessonHref = '/listening';
-    } else {
-      const r = readingLessons.find((item) => item.id === lastAttempt.lesson_id);
-      ongoingLessonTitle = r ? r.title : 'TOEIC Reading';
-      ongoingLessonHref = '/reading';
-    }
+    const r = readingLessons.find((item) => item.id === lastAttempt.lesson_id);
+    ongoingLessonTitle = r ? r.title : 'TOEIC Reading';
+    ongoingLessonHref = '/reading';
+  } else if (readingLessons.length > 0) {
+    ongoingLessonTitle = readingLessons[0].title;
+    ongoingLessonHref = '/reading';
   }
 
   if (loading) {
@@ -108,8 +102,21 @@ export default function HomePage() {
           {greeting} Chúc bạn một buổi học tập hiệu quả.
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 max-w-xl">
-          Quản lý từ vựng TOEIC theo chủ đề, bài học và ngày học. Học Listening & Reading gắn kết trực tiếp với sổ ghi chép.
+          Quản lý từ vựng TOEIC theo chủ đề, bài học và ngày học. Học Reading gắn kết trực tiếp với sổ ghi chép điện tử.
         </p>
+      </div>
+
+      {/* Thông báo độc lập dữ liệu & Cảnh báo sao lưu */}
+      <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-100 flex items-start gap-3">
+        <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-blue-900 space-y-0.5">
+          <p className="font-semibold">
+            Không gian học tập độc lập & Bảo mật trên thiết bị của bạn
+          </p>
+          <p className="text-blue-800 leading-relaxed">
+            Dữ liệu được lưu trữ trực tiếp trên trình duyệt của riêng bạn. Khi bạn bè truy cập cùng đường link, họ sẽ có không gian học tập riêng và không bao giờ ghi đè lên dữ liệu của bạn. Hãy định kỳ vào <strong>Cài đặt → Xuất dữ liệu JSON</strong> để sao lưu an toàn!
+          </p>
+        </div>
       </div>
 
       {/* 2. Thống kê gọn: Số từ đã lưu & Số từ cần ôn hôm nay */}
@@ -159,7 +166,7 @@ export default function HomePage() {
 
       </div>
 
-      {/* 3. Bài Listening/Reading đang học dở */}
+      {/* 3. Bài Reading đang học dở */}
       <div className="p-5 sm:p-6 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
         <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
           Bài học gần nhất
@@ -175,8 +182,8 @@ export default function HomePage() {
             </div>
             <p className="text-xs text-slate-500">
               {lastAttempt
-                ? `Đã làm bài với kết quả ${lastAttempt.score}/${lastAttempt.total} câu. Tiếp tục luyện tập để cải thiện kỹ năng.`
-                : 'Bắt đầu luyện tập bài nghe với transcript tương tác.'}
+                ? `Đã làm bài với kết quả ${lastAttempt.score}/${lastAttempt.total} câu. Tiếp tục luyện tập để cải thiện kỹ năng đọc hiểu.`
+                : 'Luyện tập các bài đọc TOEIC Part 5, 6, 7 với lời giải thích chi tiết.'}
             </p>
           </div>
 
