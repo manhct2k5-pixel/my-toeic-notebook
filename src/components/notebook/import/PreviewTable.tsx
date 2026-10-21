@@ -13,10 +13,13 @@ import {
   Filter, 
   Edit3,
   Search,
-  ChevronDown
+  ChevronDown,
+  Sparkles,
+  ArrowRightLeft
 } from 'lucide-react';
 import { ParsedVocabularyRow } from '@/lib/file-parser/types';
 import { PartOfSpeech, Topic, Unit } from '@/types';
+import { lookupDictionary } from '@/lib/dictionary';
 
 interface PreviewTableProps {
   rows: ParsedVocabularyRow[];
@@ -50,6 +53,10 @@ export function PreviewTable({
   const [batchTopic, setBatchTopic] = useState('');
   const [batchUnit, setBatchUnit] = useState('');
   const [showBatchTools, setShowBatchTools] = useState(false);
+
+  // Auto dictionary lookup state
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupStatusMessage, setLookupStatusMessage] = useState<string | null>(null);
 
   // Status counts
   const totalCount = rows.length;
@@ -170,6 +177,57 @@ export function PreviewTable({
     );
   };
 
+  const handleAutoLookupMissing = async () => {
+    setIsLookingUp(true);
+    setLookupStatusMessage('Đang tra cứu từ điển để bổ sung phiên âm & nghĩa...');
+    let updatedCount = 0;
+
+    const newRows = [...rows];
+    for (let i = 0; i < newRows.length; i++) {
+      const row = { ...newRows[i] };
+      // Only lookup if word exists and missing either IPA or meaning
+      if (row.word.trim() && (!row.phonetic_us || !row.phonetic_uk || !row.meaning_vi)) {
+        try {
+          const dict = await lookupDictionary(row.word);
+          if (dict) {
+            let modified = false;
+            if (!row.phonetic_us && dict.phonetic_us) {
+              row.phonetic_us = dict.phonetic_us;
+              modified = true;
+            }
+            if (!row.phonetic_uk && dict.phonetic_uk) {
+              row.phonetic_uk = dict.phonetic_uk;
+              modified = true;
+            }
+            if (!row.meaning_vi && dict.meaning_vi) {
+              row.meaning_vi = dict.meaning_vi;
+              modified = true;
+            }
+            if (row.pos === 'noun' && dict.pos) {
+              row.pos = dict.pos;
+              modified = true;
+            }
+            if (modified) {
+              updatedCount++;
+              if (row.meaning_vi && row.status === 'missing_meaning') {
+                row.status = row.topic || row.unit ? 'valid' : 'unassigned_category';
+                row.statusMessage = undefined;
+              }
+              newRows[i] = row;
+            }
+          }
+        } catch (e) {
+          console.warn(`Tra cứu thất bại cho từ "${row.word}":`, e);
+        }
+      }
+    }
+
+    onRowsChange(newRows);
+    setIsLookingUp(false);
+    setLookupStatusMessage(`Đã bổ sung thành công thông tin cho ${updatedCount} từ vựng.`);
+    setTimeout(() => setLookupStatusMessage(null), 5000);
+  };
+
   const areAllSelected = displayedRows.length > 0 && displayedRows.every((r) => r.selected);
 
   return (
@@ -270,6 +328,17 @@ export function PreviewTable({
           </button>
 
           <button
+            type="button"
+            onClick={handleAutoLookupMissing}
+            disabled={isLookingUp}
+            className="px-2.5 py-1 text-xs font-medium rounded-lg border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 flex items-center gap-1 transition-colors disabled:opacity-50 shrink-0"
+            title="Tra cứu từ điển để bổ sung phiên âm hoặc nghĩa còn thiếu"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+            <span>{isLookingUp ? 'Đang tra cứu...' : 'Tra cứu bổ sung'}</span>
+          </button>
+
+          <button
             onClick={handleAddRow}
             className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1 shadow-xs transition-colors shrink-0"
           >
@@ -334,6 +403,22 @@ export function PreviewTable({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Lookup Status Banner */}
+      {lookupStatusMessage && (
+        <div className="p-2.5 bg-violet-50 border border-violet-200 rounded-xl flex items-center justify-between text-xs text-violet-800 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-600 shrink-0" />
+            <span>{lookupStatusMessage}</span>
+          </div>
+          <button
+            onClick={() => setLookupStatusMessage(null)}
+            className="text-violet-500 hover:text-violet-700 text-xs font-semibold px-2"
+          >
+            Đóng
+          </button>
         </div>
       )}
 
@@ -416,20 +501,44 @@ export function PreviewTable({
                   {/* IPA (Phonetic UK / US) */}
                   <td className="px-1.5 py-1.5">
                     <div className="flex flex-col gap-0.5">
-                      <input
-                        type="text"
-                        value={row.phonetic_uk || ''}
-                        onChange={(e) => handleRowChange(row.id, { phonetic_uk: e.target.value })}
-                        placeholder="UK: /.../"
-                        className="w-full px-1.5 py-0.5 font-mono text-[11px] rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-300"
-                      />
-                      <input
-                        type="text"
-                        value={row.phonetic_us || ''}
-                        onChange={(e) => handleRowChange(row.id, { phonetic_us: e.target.value })}
-                        placeholder="US: /.../"
-                        className="w-full px-1.5 py-0.5 font-mono text-[11px] rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-300"
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={row.phonetic_uk || ''}
+                          onChange={(e) => handleRowChange(row.id, { phonetic_uk: e.target.value })}
+                          placeholder="UK: /.../"
+                          className="w-full px-1.5 py-0.5 font-mono text-[11px] rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-300 pr-7"
+                        />
+                        {!row.phonetic_uk && row.phonetic_us && (
+                          <button
+                            type="button"
+                            onClick={() => handleRowChange(row.id, { phonetic_uk: row.phonetic_us })}
+                            className="absolute right-1 text-[9px] text-violet-600 hover:text-violet-800 bg-violet-100/70 hover:bg-violet-200 px-1 py-0.2 rounded font-sans"
+                            title="Sao chép từ US sang UK"
+                          >
+                            =US
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={row.phonetic_us || ''}
+                          onChange={(e) => handleRowChange(row.id, { phonetic_us: e.target.value })}
+                          placeholder="US: /.../"
+                          className="w-full px-1.5 py-0.5 font-mono text-[11px] rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-300 pr-7"
+                        />
+                        {!row.phonetic_us && row.phonetic_uk && (
+                          <button
+                            type="button"
+                            onClick={() => handleRowChange(row.id, { phonetic_us: row.phonetic_uk })}
+                            className="absolute right-1 text-[9px] text-violet-600 hover:text-violet-800 bg-violet-100/70 hover:bg-violet-200 px-1 py-0.2 rounded font-sans"
+                            title="Sao chép từ UK sang US"
+                          >
+                            =UK
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </td>
 

@@ -184,9 +184,9 @@ export function QuizMCQ({ words, allWords, mode = 'multiple_choice', onFinish, o
             </div>
 
             <div className="flex items-center justify-center gap-2">
-              {currentWord.phonetic_us && (
+              {(currentWord.phonetic_us || currentWord.phonetic_uk) && (
                 <span className="text-xs font-mono text-slate-500">
-                  {currentWord.phonetic_us}
+                  {currentWord.phonetic_us || currentWord.phonetic_uk}
                 </span>
               )}
               <div className="flex items-center bg-slate-100 rounded p-0.5 text-[10px]">
@@ -292,7 +292,7 @@ export function QuizMCQ({ words, allWords, mode = 'multiple_choice', onFinish, o
 
             <p className="pt-1">
               <strong className="text-blue-900 text-sm">{currentWord.word}</strong>{' '}
-              <span className="text-slate-500 font-mono">({currentWord.pos}) {currentWord.phonetic_us}</span>
+              <span className="text-slate-500 font-mono">({currentWord.pos}) {currentWord.phonetic_us || currentWord.phonetic_uk || ''}</span>
               {' : '}{currentWord.meaning_vi}
             </p>
             {currentWord.example_en && (

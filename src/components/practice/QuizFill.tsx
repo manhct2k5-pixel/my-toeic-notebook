@@ -168,7 +168,7 @@ export function QuizFill({ words, onFinish, onExit }: QuizFillProps) {
                 </p>
                 <p className="text-slate-700">
                   Đáp án chuẩn: <strong className="text-blue-700 text-sm font-mono">{currentWord.word}</strong>{' '}
-                  <span className="font-mono text-slate-500">{currentWord.phonetic_us}</span>
+                  <span className="font-mono text-slate-500">{currentWord.phonetic_us || currentWord.phonetic_uk || ''}</span>
                 </p>
                 {currentWord.example_en && (
                   <p className="text-slate-500 italic mt-1">&quot;{currentWord.example_en}&quot;</p>

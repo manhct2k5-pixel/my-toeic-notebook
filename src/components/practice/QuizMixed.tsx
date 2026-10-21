@@ -244,8 +244,8 @@ export function QuizMixed({ words, allWords, onFinish, onExit }: QuizMixedProps)
                 <Volume2 className="w-4 h-4" />
               </button>
             </div>
-            {currentWord.phonetic_us && (
-              <p className="text-xs font-mono text-slate-400">{currentWord.phonetic_us}</p>
+            {(currentWord.phonetic_us || currentWord.phonetic_uk) && (
+              <p className="text-xs font-mono text-slate-400">{currentWord.phonetic_us || currentWord.phonetic_uk}</p>
             )}
             <p className="text-xs text-slate-500">Chọn nghĩa tiếng Việt chính xác:</p>
           </div>
@@ -511,7 +511,7 @@ export function QuizMixed({ words, allWords, onFinish, onExit }: QuizMixedProps)
           <div className="text-xs text-slate-700 space-y-1">
             <p>
               Từ vựng: <strong className="text-blue-900 text-sm font-mono">{currentWord.word}</strong>{' '}
-              <span className="font-mono text-slate-500">({currentWord.pos}) {currentWord.phonetic_us}</span>
+              <span className="font-mono text-slate-500">({currentWord.pos}) {currentWord.phonetic_us || currentWord.phonetic_uk || ''}</span>
               {' : '}{currentWord.meaning_vi}
             </p>
             {currentWord.example_en && (

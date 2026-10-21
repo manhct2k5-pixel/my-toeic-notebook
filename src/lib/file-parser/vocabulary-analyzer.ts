@@ -9,18 +9,64 @@ import {
 // Map common text representations to standard PartOfSpeech
 export function normalizePartOfSpeech(rawPos?: string): PartOfSpeech {
   if (!rawPos) return 'noun';
-  const clean = rawPos.toLowerCase().trim().replace(/[()[\]/]/g, ' ');
+  const clean = rawPos.toLowerCase().trim().replace(/[()[\]/.,-]/g, ' ');
 
   if (clean.includes('noun') || clean.includes('danh từ') || /\bn\b/.test(clean)) return 'noun';
-  if (clean.includes('verb') || clean.includes('động từ') || /\bv\b/.test(clean)) return 'verb';
+  if (clean.includes('verb') || clean.includes('động từ') || /\bv\b/.test(clean) || /\bvt\b/.test(clean) || /\bvi\b/.test(clean)) return 'verb';
   if (clean.includes('adjective') || clean.includes('tính từ') || /\badj\b/.test(clean) || /\ba\b/.test(clean)) return 'adjective';
   if (clean.includes('adverb') || clean.includes('trạng từ') || /\badv\b/.test(clean)) return 'adverb';
-  if (clean.includes('phrase') || clean.includes('cụm từ') || clean.includes('cụm')) return 'phrase';
+  if (clean.includes('phrase') || clean.includes('cụm từ') || clean.includes('cụm') || /\bphr\b/.test(clean)) return 'phrase';
   if (clean.includes('preposition') || clean.includes('giới từ') || /\bprep\b/.test(clean)) return 'preposition';
   if (clean.includes('conjunction') || clean.includes('liên từ') || /\bconj\b/.test(clean)) return 'conjunction';
   if (clean.includes('idiom') || clean.includes('thành ngữ')) return 'idiom';
 
   return 'other';
+}
+
+/**
+ * Clean Word field: strips leading bullets/numbering, extracts inline IPA or POS if present
+ */
+export function cleanWordField(val: string): { word: string; detectedPos?: PartOfSpeech; detectedIPA?: string } {
+  let text = val.replace(/^(?:Word|Term|No\.?|Item)?\s*[\d+.)\-–—*•\s]+/i, '').trim();
+  let detectedPos: PartOfSpeech | undefined;
+  let detectedIPA: string | undefined;
+
+  // Extract IPA if inside brackets or slashes
+  const ipa = extractIPAFromText(text);
+  if (ipa.phonetic_us || ipa.phonetic_uk) {
+    detectedIPA = ipa.phonetic_us || ipa.phonetic_uk;
+    text = stripIPAFromText(text);
+  }
+
+  // Extract POS if inside parens e.g. (n), (v.), (adj)
+  const posMatch = text.match(POS_PAREN_REGEX);
+  if (posMatch) {
+    detectedPos = normalizePartOfSpeech(posMatch[0]);
+    text = text.replace(posMatch[0], ' ').trim();
+  }
+
+  return { word: text.trim(), detectedPos, detectedIPA };
+}
+
+/**
+ * Clean Meaning field: strips leading punctuation, extracts leading POS (e.g. "n. cuộc hẹn", "(v) lên lịch")
+ */
+export function cleanMeaningField(val: string): { meaning: string; detectedPos?: PartOfSpeech } {
+  let text = val.replace(/^[-–—:=~•*\s]+/, '').trim();
+  let detectedPos: PartOfSpeech | undefined;
+
+  // Check if meaning starts with POS e.g. "n. cuộc hẹn", "(v) đàm phán", "adj. quan trọng"
+  const leadingPosMatch = text.match(/^(?:\(([a-zA-Z\s/.]+)\)|([a-zA-Z/]{1,6})\.)\s*/);
+  if (leadingPosMatch) {
+    const rawPos = leadingPosMatch[1] || leadingPosMatch[2];
+    const normalized = normalizePartOfSpeech(rawPos);
+    if (normalized !== 'other') {
+      detectedPos = normalized;
+      text = text.substring(leadingPosMatch[0].length).trim();
+    }
+  }
+
+  return { meaning: text.replace(/^[-–—:=~•*\s]+/, '').trim(), detectedPos };
 }
 
 /**
@@ -31,16 +77,16 @@ export function autoMapColumns(headers: string[]): ColumnMapping {
   const usedFields = new Set<ColumnField>();
 
   const fieldMatchRules: { field: ColumnField; keywords: string[] }[] = [
-    { field: 'word', keywords: ['word', 'english', 'tiếng anh', 'từ vựng', 'từ', 'vocab', 'term', 'en'] },
-    { field: 'meaning_vi', keywords: ['meaning', 'nghĩa', 'nghĩa tiếng việt', 'dịch nghĩa', 'vietnamese', 'giải nghĩa', 'định nghĩa', 'definition', 'vi'] },
-    { field: 'pos', keywords: ['pos', 'part of speech', 'loại từ', 'từ loại', 'type', 'part'] },
-    { field: 'phonetic_uk', keywords: ['ipa uk', 'uk ipa', 'phonetic uk', 'phiên âm uk', 'uk phonetic', 'pronunciation uk', 'bre', 'british', 'uk pronunciation', 'phát âm uk'] },
-    { field: 'phonetic_us', keywords: ['ipa us', 'us ipa', 'phonetic us', 'phiên âm us', 'us phonetic', 'ipa', 'phonetic', 'phiên âm', 'pronunciation', 'pronunciation us', 'ame', 'american', 'us pronunciation', 'phát âm', 'phát âm us'] },
-    { field: 'example_en', keywords: ['example (en)', 'example en', 'en example', 'ví dụ (en)', 'câu ví dụ', 'ví dụ', 'example', 'sentence', 'ví dụ tiếng anh', 'example sentence'] },
-    { field: 'example_vi', keywords: ['example (vi)', 'example vi', 'vi example', 'dịch ví dụ', 'nghĩa ví dụ', 'ví dụ tiếng việt', 'translation', 'dịch', 'example translation', 'bản dịch', 'nghĩa câu ví dụ', 'ví dụ (vi)', 'ví dụ vi'] },
-    { field: 'collocations', keywords: ['collocations', 'collocation', 'cụm từ liên quan', 'cụm từ', 'phrases', 'cụm'] },
-    { field: 'notes', keywords: ['personal notes', 'notes', 'note', 'ghi chú', 'chú thích', 'nhận xét'] },
-    { field: 'topic', keywords: ['topic', 'chủ đề', 'chủ điểm', 'category'] },
+    { field: 'word', keywords: ['word', 'english', 'tiếng anh', 'từ vựng', 'từ', 'vocab', 'term', 'en', 'vocabulary', 'từ tiếng anh'] },
+    { field: 'meaning_vi', keywords: ['meaning', 'nghĩa', 'nghĩa tiếng việt', 'dịch nghĩa', 'vietnamese', 'giải nghĩa', 'định nghĩa', 'definition', 'vi', 'ý nghĩa', 'nghĩa từ', 'giải thích'] },
+    { field: 'pos', keywords: ['pos', 'part of speech', 'loại từ', 'từ loại', 'type', 'part', 'từ loại (pos)'] },
+    { field: 'phonetic_uk', keywords: ['ipa uk', 'uk ipa', 'phonetic uk', 'phiên âm uk', 'uk phonetic', 'pronunciation uk', 'bre', 'british', 'uk pronunciation', 'phát âm uk', 'phiên âm (uk)', 'uk'] },
+    { field: 'phonetic_us', keywords: ['ipa us', 'us ipa', 'phonetic us', 'phiên âm us', 'us phonetic', 'ipa', 'phonetic', 'phiên âm', 'pronunciation', 'pronunciation us', 'ame', 'american', 'us pronunciation', 'phát âm', 'phát âm us', 'phiên âm (us)', 'us', 'cách phát âm'] },
+    { field: 'example_en', keywords: ['example (en)', 'example en', 'en example', 'ví dụ (en)', 'câu ví dụ', 'ví dụ', 'example', 'sentence', 'ví dụ tiếng anh', 'example sentence', 'câu ví dụ (en)', 'câu mẫu'] },
+    { field: 'example_vi', keywords: ['example (vi)', 'example vi', 'vi example', 'dịch ví dụ', 'nghĩa ví dụ', 'ví dụ tiếng việt', 'translation', 'dịch', 'example translation', 'bản dịch', 'nghĩa câu ví dụ', 'ví dụ (vi)', 'ví dụ vi', 'dịch nghĩa ví dụ', 'bản dịch ví dụ'] },
+    { field: 'collocations', keywords: ['collocations', 'collocation', 'cụm từ liên quan', 'cụm từ', 'phrases', 'cụm', 'cụm từ đi kèm'] },
+    { field: 'notes', keywords: ['personal notes', 'notes', 'note', 'ghi chú', 'chú thích', 'nhận xét', 'lưu ý'] },
+    { field: 'topic', keywords: ['topic', 'chủ đề', 'chủ điểm', 'category', 'nhóm từ'] },
     { field: 'unit', keywords: ['unit', 'lesson', 'bài học', 'bài', 'chương', 'chapter'] },
     { field: 'study_date', keywords: ['study date', 'date', 'ngày học', 'ngày', 'created_at'] },
   ];
@@ -117,21 +163,40 @@ export function parseTabularData(
       if (!val || field === 'ignore') continue;
 
       switch (field) {
-        case 'word':
-          word = val;
+        case 'word': {
+          const wordObj = cleanWordField(val);
+          word = wordObj.word;
+          if (wordObj.detectedPos && pos === 'noun') pos = wordObj.detectedPos;
+          if (wordObj.detectedIPA && !phonetic_us) phonetic_us = wordObj.detectedIPA;
           break;
+        }
         case 'pos':
           pos = normalizePartOfSpeech(val);
           break;
-        case 'phonetic_uk':
-          phonetic_uk = val;
+        case 'phonetic_uk': {
+          const extracted = extractIPAFromText(val);
+          phonetic_uk = extracted.phonetic_uk || extracted.phonetic_us || formatAsIPA(val) || '';
+          if (extracted.phonetic_us && !phonetic_us) {
+            phonetic_us = extracted.phonetic_us;
+          }
           break;
-        case 'phonetic_us':
-          phonetic_us = val;
+        }
+        case 'phonetic_us': {
+          const extracted = extractIPAFromText(val);
+          if (extracted.phonetic_uk && !phonetic_uk) {
+            phonetic_uk = extracted.phonetic_uk;
+          }
+          phonetic_us = extracted.phonetic_us || extracted.phonetic_uk || formatAsIPA(val) || '';
           break;
-        case 'meaning_vi':
-          meaning_vi = val;
+        }
+        case 'meaning_vi': {
+          const meaningObj = cleanMeaningField(val);
+          meaning_vi = meaningObj.meaning;
+          if (meaningObj.detectedPos && pos === 'noun') {
+            pos = meaningObj.detectedPos;
+          }
           break;
+        }
         case 'example_en':
           example_en = val;
           break;
@@ -161,7 +226,7 @@ export function parseTabularData(
 
     if (!word && !meaning_vi) return; // Skip empty rows
 
-    // Clean up word (e.g. remove leading numbers like "1. ", "- ")
+    // Clean up word
     const cleanWord = word.replace(/^[\d+.)\-–—*\s]+/, '').trim();
 
     // Check status
@@ -207,22 +272,43 @@ export function parseTabularData(
 // ---------------------------------------------------------------------------
 
 /**
- * Regex that matches content inside /…/ or […] that looks like IPA transcription.
- * IPA content must contain at least one IPA-specific character OR be standard phonetic letters.
+ * Format string as standard IPA enclosed in slashes /.../
+ */
+export function formatAsIPA(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  let clean = raw.trim();
+  if (!clean) return undefined;
+  // If already formatted with slashes or brackets
+  if ((clean.startsWith('/') && clean.endsWith('/')) || (clean.startsWith('[') && clean.endsWith(']'))) {
+    return clean;
+  }
+  // Strip stray outer delimiters and wrap in slashes
+  clean = clean.replace(/^[/[\\(]+|[/\\]\)]+$/g, '').trim();
+  if (!clean) return undefined;
+  return `/${clean}/`;
+}
+
+/**
+ * Regex matching IPA-specific characters across UK and US phonetic systems
  */
 const IPA_CONTENT_CHARS = /[əɪʊɔʌɑæðθʃʒŋˈˌːɛɜɒʍɾɻɹɬɮʔβɸçʝɣɥʀħʕɐɨʉɯɤœøɶɞ]/;
 
-function looksLikeIPA(text: string): boolean {
+export function looksLikeIPA(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed || trimmed.length < 1) return false;
   // Must contain at least one IPA-specific character
   if (IPA_CONTENT_CHARS.test(trimmed)) return true;
-  // Or be only ASCII letters + common phonetic marks (stress, length, syllable dots)
-  if (/^[a-zA-Zˈˌːˑ.ʼ\s\-]+$/.test(trimmed) && trimmed.length >= 2) return true;
+  // Or be ASCII letters with phonetic symbols, stress marks (ˈ, ˌ, '), length mark (: or ː), syllable dots (.), optional parens
+  if (/^[a-zA-Zˈˌːˑ.ʼ'\,:()\s\-]+$/.test(trimmed) && trimmed.length >= 2) {
+    return /[aeiou]/i.test(trimmed);
+  }
   return false;
 }
 
-const IPA_BRACKET_REGEX = /(?:\/([^/]+)\/|\[([^\]]+)\])/g;
+/**
+ * Matches IPA transcriptions in `/.../`, `[...]`, or `(...)` containing IPA characters
+ */
+const IPA_BRACKET_REGEX = /(?:\/([^/]+)\/|\[([^\]]+)\]|\(([^)]*[əɪʊɔʌɑæðθʃʒŋˈˌːɛɜɒʍɾɻɹɬɮʔβɸçʝɣɥʀħʕɐɨʉɯɤœøɶɞ][^)]*)\))/g;
 
 interface ExtractedIPA {
   phonetic_uk?: string;
@@ -234,25 +320,26 @@ const US_LABEL_REGEX = /\b(?:us|ame|amer(?:ican)?)\b/i;
 
 /**
  * Extract IPA transcriptions from text, detecting UK/US labels.
- * Returns { phonetic_uk, phonetic_us }.
- * When only one IPA found with no label, it goes to phonetic_us (matching DB convention).
+ * Always formats the output cleanly as /.../.
  */
-function extractIPAFromText(text: string): ExtractedIPA {
+export function extractIPAFromText(text: string): ExtractedIPA {
   const result: ExtractedIPA = {};
 
-  // Collect all IPA tokens with their surrounding context
   interface IPAToken {
-    raw: string;      // the matched /…/ or […] including delimiters
-    content: string;  // inside content
+    raw: string;      // the matched bracket/slash including delimiters
+    content: string;  // formatted /.../ content
     index: number;    // position in text
   }
   const tokens: IPAToken[] = [];
   let m: RegExpExecArray | null;
   const re = new RegExp(IPA_BRACKET_REGEX.source, 'g');
   while ((m = re.exec(text)) !== null) {
-    const content = (m[1] || m[2] || '').trim();
-    if (looksLikeIPA(content)) {
-      tokens.push({ raw: m[0], content, index: m.index });
+    const rawContent = (m[1] || m[2] || m[3] || '').trim();
+    if (looksLikeIPA(rawContent)) {
+      const formatted = formatAsIPA(rawContent);
+      if (formatted) {
+        tokens.push({ raw: m[0], content: formatted, index: m.index });
+      }
     }
   }
 
@@ -260,7 +347,6 @@ function extractIPAFromText(text: string): ExtractedIPA {
 
   if (tokens.length === 1) {
     const token = tokens[0];
-    // Check for label around the token
     const before = text.substring(Math.max(0, token.index - 30), token.index);
     const after = text.substring(token.index + token.raw.length, token.index + token.raw.length + 30);
     const context = before + ' ' + after;
@@ -270,26 +356,25 @@ function extractIPAFromText(text: string): ExtractedIPA {
     } else if (US_LABEL_REGEX.test(context) && !UK_LABEL_REGEX.test(context)) {
       result.phonetic_us = token.content;
     } else {
-      // No label or ambiguous → store in phonetic_us (DB convention)
+      // General IPA: store in phonetic_us (notebook standard)
       result.phonetic_us = token.content;
     }
     return result;
   }
 
-  // Multiple IPA tokens — try to assign UK/US by looking at labels around each
+  // Multiple IPA tokens — inspect nearby context for UK/US labels
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     const prevTokenEnd = i > 0 ? tokens[i - 1].index + tokens[i - 1].raw.length : 0;
     const nextTokenStart = i < tokens.length - 1 ? tokens[i + 1].index : text.length;
 
-    // Confine context between adjacent tokens (or max 20 chars) to prevent bleeding
     const beforeStart = Math.max(prevTokenEnd, token.index - 20);
     const afterEnd = Math.min(nextTokenStart, token.index + token.raw.length + 20);
 
     const before = text.substring(beforeStart, token.index);
     const after = text.substring(token.index + token.raw.length, afterEnd);
 
-    // Prioritize 'after' (e.g. /.../ (UK) or /.../ (US)), then 'before' (e.g. UK: /.../)
+    // Prioritize 'after' (e.g. /.../ (UK)), then 'before' (e.g. UK: /.../)
     if (UK_LABEL_REGEX.test(after)) {
       result.phonetic_uk = result.phonetic_uk || token.content;
     } else if (US_LABEL_REGEX.test(after)) {
@@ -301,13 +386,13 @@ function extractIPAFromText(text: string): ExtractedIPA {
     }
   }
 
-  // If we found two tokens but no labels matched, assume first=UK, second=US
+  // If we found two tokens but neither had a label, assume first=UK, second=US (Oxford/Cambridge convention)
   if (!result.phonetic_uk && !result.phonetic_us && tokens.length >= 2) {
     result.phonetic_uk = tokens[0].content;
     result.phonetic_us = tokens[1].content;
   }
 
-  // If only one side was labeled and we have extra unassigned tokens, fill the other side
+  // Fill counterpart if only one was labeled and we have remaining tokens
   if (result.phonetic_uk && !result.phonetic_us) {
     const unassigned = tokens.find(t => t.content !== result.phonetic_uk);
     if (unassigned) result.phonetic_us = unassigned.content;
@@ -323,7 +408,7 @@ function extractIPAFromText(text: string): ExtractedIPA {
  * Remove IPA tokens (including surrounding whitespace and UK/US labels) from text.
  */
 function stripIPAFromText(text: string): string {
-  let clean = text.replace(/\s*(?:\/[^/]+\/|\[[^\]]+\])\s*/g, ' ');
+  let clean = text.replace(/(?:\/[^/]+\/|\[[^\]]+\]|\((?:[^)]*[əɪʊɔʌɑæðθʃʒŋˈˌːɛɜɒʍɾɻɹɬɮʔβɸçʝɣɥʀħʕɐɨʉɯɤœøɶɞ][^)]*)\))/g, ' ');
   // Also strip standalone (UK), (US), (BrE), (AmE) labels left behind
   clean = clean.replace(/\s*,?\s*\((?:UK|US|BrE|AmE)\)/gi, ' ');
   clean = clean.replace(/\b(?:UK|US|BrE|AmE)[:\s]+/gi, ' ');
@@ -394,31 +479,42 @@ const COLLOCATION_PREFIX_REGEX = /^(?:Collocation|Collocations|Cụm từ)\s*[:�
 const UNIT_HEADER_REGEX = /^(?:Unit|Lesson|Bài)\s*(\d+)?[:\s–—-]+([^\n\r]+)/i;
 const TOPIC_HEADER_REGEX = /^(?:Topic|Chủ đề)[:\s–—-]+([^\n\r]+)/i;
 
-/** POS pattern inside parentheses, e.g. (n), (v/n), (adj), (noun), (verb) - excludes UK/US labels */
-const POS_PAREN_REGEX = /\((n|v|adj|adv|prep|conj|pron|phrase|idiom|noun|verb|adjective|adverb|cụm từ|thành ngữ|v\/n|n\/v|vt|vi|adj\/adv|a)(?:\/[a-zA-Z]+)?\)/i;
+/** POS pattern inside parentheses, e.g. (n), (v.), (adj), (noun), (v/n), (v, n) */
+const POS_PAREN_REGEX = /\((n|v|adj|adv|prep|conj|pron|phrase|idiom|noun|verb|adjective|adverb|cụm từ|thành ngữ|vt|vi|phr|a)\.?(?:[\s,/]+(n|v|adj|adv|prep|conj|pron|phrase|idiom|noun|verb|adjective|adverb|vt|vi|a)\.?)*\)/i;
 
-/** Check if a line contains predominantly Vietnamese characters (for auto-detecting example_vi) */
-function isVietnameseText(text: string): boolean {
-  // Vietnamese diacritics that don't appear in IPA or English
+/** Check if text contains Vietnamese diacritics */
+export function isVietnameseText(text: string): boolean {
   const vietChars = /[àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ]/i;
   return vietChars.test(text);
 }
 
-/** Check if an entire line is just IPA content (only /…/ or [brackets] with possible whitespace) */
+/** Common Vietnamese words without tone marks for boundary fallback */
+const COMMON_TONELESS_VIETNAMESE = new Set([
+  'la', 'co', 'duoc', 'khong', 'cho', 'nguoi', 'trong', 'tren', 'duoi',
+  'voi', 'vao', 'ra', 'den', 'di', 'lam', 'bien', 'hop', 'dong', 'doanh',
+  'thu', 'tien', 'hang', 'giam', 'tang', 'them', 'bot', 'mua', 'ban',
+  'viec', 'bao', 'cao', 'nhan', 'vien', 'cong', 'ty', 'phong', 'ban',
+  'chi', 'phi', 'gia', 'ca', 'luong', 'thuong', 'ngay', 'thang', 'nam'
+]);
+
+function isCommonVietnameseWord(token: string): boolean {
+  const clean = token.toLowerCase().replace(/[^a-z]/g, '');
+  return COMMON_TONELESS_VIETNAMESE.has(clean);
+}
+
+/** Check if an entire line is just IPA content */
 function isIPAOnlyLine(line: string): boolean {
-  const stripped = line.replace(/(?:\/[^/]+\/|\[[^\]]+\])/g, '').trim();
+  const stripped = line.replace(/(?:\/[^/]+\/|\[[^\]]+\]|\((?:[^)]*[əɪʊɔʌɑæðθʃʒŋˈˌːɛɜɒʍɾɻɹɬɮʔβɸçʝɣɥʀħʕɐɨʉɯɤœøɶɞ][^)]*)\))/g, '').trim();
   return stripped.length === 0 && IPA_BRACKET_REGEX.test(line);
 }
 
 /**
- * Detect whether a line looks like a vocab start line (has an English word with optional POS/IPA/meaning).
- * Returns true if it appears to be a new vocab entry, false if it's a continuation or heading.
+ * Detect whether a line looks like a vocab start line
  */
 function isVocabStartLine(line: string): boolean {
-  // Must not be empty
   if (!line.trim()) return false;
 
-  const cleaned = line.replace(/^[\d+.)\-–—*•\s]+/, '').trim();
+  const cleaned = line.replace(/^(?:Word|Term|No\.?|Item)?\s*[\d+.)\-–—*•\s]+/i, '').trim();
   if (!cleaned) return false;
 
   // Must start with Latin characters (English word)
@@ -438,22 +534,22 @@ function isVocabStartLine(line: string): boolean {
     return false;
   }
 
-  // Check for typical vocab patterns:
-  // - Has a delimiter (–, -, :, =) separating word from meaning
-  // - Has POS in parentheses
-  // - Has IPA
-  // - Is a short English phrase (not a full sentence)
+  // Check for typical vocab patterns: delimiter, POS in parens, IPA, or short English phrase
   const hasDelimiter = /\s*[:=–—]\s*|(?:\s+-\s*|\s*-\s+|\)\s*-\s*)/.test(cleaned);
   const hasPOS = POS_PAREN_REGEX.test(cleaned);
-  const hasIPA = /[/\[].*[əɪʊɔʌɑæðθʃʒŋˈˌː].*[/\]]/.test(cleaned);
-  const hasTab = cleaned.includes('\t');
+  const hasIPA = /[/\[(].*[əɪʊɔʌɑæðθʃʒŋˈˌː].*[/\])]/.test(cleaned);
   const wordCount = cleaned.split(/\s+/).length;
 
-  // If has any vocab indicator, it's a start line
-  if (hasDelimiter || hasPOS || hasIPA || hasTab) return true;
+  if (hasDelimiter || hasPOS || hasIPA) return true;
 
   // Short English-only text (1-5 words) can be a word entry without meaning
   if (wordCount <= 5 && /^[a-zA-Z\s'-]+$/.test(cleaned)) return true;
+
+  // Word followed by Vietnamese text
+  const tokens = cleaned.split(/\s+/);
+  if (tokens.length >= 2 && (isVietnameseText(cleaned) || tokens.some(isCommonVietnameseWord))) {
+    return true;
+  }
 
   return false;
 }
@@ -476,67 +572,124 @@ interface VocabEntryBuilder {
 }
 
 /**
- * Parse a single vocab "start line" into a VocabEntryBuilder.
- * Extracts word, POS, IPA, meaning, and inline example.
+ * Parse tab-separated entry cleanly (e.g. pasted from Excel / Quizlet / Anki)
  */
-function parseVocabStartLine(rawLine: string): VocabEntryBuilder | null {
-  let cleaned = rawLine.replace(/^[\d+.)\-–—*•\s]+/, '').trim();
-  if (!cleaned) return null;
+function parseTabSeparatedEntry(rawLine: string): VocabEntryBuilder | null {
+  const parts = rawLine.split('\t').map(p => p.trim()).filter(p => p.length > 0);
+  if (parts.length < 2) return null;
 
   const entry: VocabEntryBuilder = {
     word: '',
     pos: 'noun',
     meaning_vi: '',
     lastFieldWasExampleEn: false,
+    hadDelimiter: true,
   };
 
-  // 1. Tab-separated handling (often pasted from Excel / Quizlet)
-  if (cleaned.includes('\t')) {
-    const parts = cleaned.split('\t').map((p) => p.trim()).filter((p) => p.length > 0);
-    if (parts.length >= 2) {
-      entry.word = parts[0];
-      entry.meaning_vi = parts[1];
-      if (parts.length >= 3) {
-        const third = parts[2];
-        if (['noun', 'verb', 'adj', 'adv', 'v', 'n', 'phrase', 'idiom'].includes(third.toLowerCase())) {
-          entry.pos = normalizePartOfSpeech(third);
-          if (parts[3]) entry.example_en = parts[3];
-        } else {
-          // Could be POS from normalizePartOfSpeech
-          const normalizedPos = normalizePartOfSpeech(third);
-          if (normalizedPos !== 'other') {
-            entry.pos = normalizedPos;
-            if (parts[3]) entry.example_en = parts[3];
-          } else {
-            entry.example_en = third;
-          }
-        }
-      }
-      return entry;
+  const remainingParts: string[] = [];
+
+  for (const part of parts) {
+    // 1. Is this part an IPA?
+    const ipa = extractIPAFromText(part);
+    if (ipa.phonetic_us || ipa.phonetic_uk) {
+      if (ipa.phonetic_uk) entry.phonetic_uk = ipa.phonetic_uk;
+      if (ipa.phonetic_us) entry.phonetic_us = ipa.phonetic_us;
+      continue;
+    }
+
+    // 2. Is this part a POS? (e.g. "n", "v", "adj", "noun", "verb")
+    const lower = part.toLowerCase().replace(/[()[\]/.]/g, '');
+    if (['n', 'v', 'adj', 'adv', 'noun', 'verb', 'adjective', 'adverb', 'phrase', 'idiom', 'prep', 'conj'].includes(lower)) {
+      entry.pos = normalizePartOfSpeech(part);
+      continue;
+    }
+
+    // 3. Otherwise save for word / meaning / example
+    remainingParts.push(part);
+  }
+
+  // First remaining is Word
+  if (remainingParts.length > 0) {
+    const wordClean = cleanWordField(remainingParts[0]);
+    entry.word = wordClean.word;
+    if (wordClean.detectedPos && entry.pos === 'noun') entry.pos = wordClean.detectedPos;
+    if (wordClean.detectedIPA && !entry.phonetic_us) entry.phonetic_us = wordClean.detectedIPA;
+  }
+
+  // Second remaining is Meaning (or Example if it's an English sentence)
+  if (remainingParts.length > 1) {
+    const second = remainingParts[1];
+    if (/^[A-Z]/.test(second) && second.endsWith('.') && !isVietnameseText(second) && second.split(/\s+/).length >= 4) {
+      entry.example_en = second;
+      if (remainingParts[2]) entry.example_vi = remainingParts[2];
+    } else {
+      const meaningClean = cleanMeaningField(second);
+      entry.meaning_vi = meaningClean.meaning;
+      if (meaningClean.detectedPos && entry.pos === 'noun') entry.pos = meaningClean.detectedPos;
     }
   }
 
-  // 2. Extract IPA
+  // Third remaining
+  if (remainingParts.length > 2 && !entry.example_en) {
+    const third = remainingParts[2];
+    if (/^[A-Z]/.test(third) && third.endsWith('.') && !isVietnameseText(third)) {
+      entry.example_en = third;
+      if (remainingParts[3]) entry.example_vi = remainingParts[3];
+    } else if (isVietnameseText(third) && entry.example_en) {
+      entry.example_vi = third;
+    } else if (!entry.meaning_vi) {
+      entry.meaning_vi = cleanMeaningField(third).meaning;
+    } else {
+      entry.notes = third;
+    }
+  }
+
+  if (remainingParts.length > 3 && !entry.example_vi && isVietnameseText(remainingParts[3])) {
+    entry.example_vi = remainingParts[3];
+  }
+
+  return entry;
+}
+
+/**
+ * Parse a single vocab "start line" into a VocabEntryBuilder.
+ * Extracts word, POS, IPA, meaning, and inline example.
+ */
+function parseVocabStartLine(rawLine: string): VocabEntryBuilder | null {
+  let cleaned = rawLine.replace(/^(?:Word|Term|No\.?|Item)?\s*[\d+.)\-–—*•\s]+/i, '').trim();
+  if (!cleaned) return null;
+
+  // 1. Tab-separated handling (pasted from Quizlet / Excel / Anki)
+  if (cleaned.includes('\t')) {
+    const tabEntry = parseTabSeparatedEntry(cleaned);
+    if (tabEntry) return tabEntry;
+  }
+
+  const entry: VocabEntryBuilder = {
+    word: '',
+    pos: 'noun',
+    meaning_vi: '',
+    lastFieldWasExampleEn: false,
+    hadDelimiter: false,
+  };
+
+  // 2. Extract IPA from text
   const ipa = extractIPAFromText(cleaned);
   if (ipa.phonetic_uk) entry.phonetic_uk = ipa.phonetic_uk;
   if (ipa.phonetic_us) entry.phonetic_us = ipa.phonetic_us;
-  cleaned = stripIPAFromText(cleaned);
 
-  // 3. Extract POS if inside (...)
-  const posMatch = cleaned.match(POS_PAREN_REGEX);
-  if (posMatch) {
-    entry.pos = normalizePartOfSpeech(posMatch[1]);
-    cleaned = cleaned.replace(posMatch[0], ' ').trim();
-  }
+  // Track position of IPA token in cleaned text before stripping
+  const ipaMatchFirst = cleaned.match(/(?:\/[^/]+\/|\[[^\]]+\]|\((?:[^)]*[əɪʊɔʌɑæðθʃʒŋˈˌːɛɜɒʍɾɻɹɬɮʔβɸçʝɣɥʀħʕɐɨʉɯɤœøɶɞ][^)]*)\))/);
+  const ipaIndex = (ipaMatchFirst && ipaMatchFirst.index !== undefined) ? ipaMatchFirst.index : -1;
+  const ipaLength = ipaMatchFirst ? ipaMatchFirst[0].length : 0;
 
-  // 4. Extract inline example
+  // 3. Extract inline example
   const inlineExample = extractExampleFromText(cleaned);
   if (inlineExample.example_en) {
     entry.example_en = inlineExample.example_en;
     if (inlineExample.example_vi) {
       entry.example_vi = inlineExample.example_vi;
     }
-    // Remove the example patterns from cleaned
     cleaned = cleaned
       .replace(/\((?:Ex|Ví dụ|Example):?\s*[^)]+\)/i, '')
       .replace(/[-–—]\s*(?:Ex|Ví dụ|Example|e\.g\.):?\s+.+$/i, '');
@@ -548,35 +701,101 @@ function parseVocabStartLine(rawLine: string): VocabEntryBuilder | null {
     cleaned = cleaned.trim();
   }
 
-  // 5. Split word and meaning by delimiter: "–", "—", "-", ":", "="
-  // Colons, equals, en-dash, em-dash are always delimiters (never part of words)
+  // 4. Extract POS if inside parens
+  const posMatch = cleaned.match(POS_PAREN_REGEX);
+  let posIndex = -1;
+  let posLength = 0;
+  if (posMatch && posMatch.index !== undefined) {
+    entry.pos = normalizePartOfSpeech(posMatch[0]);
+    posIndex = posMatch.index;
+    posLength = posMatch[0].length;
+  }
+
+  // 5. Determine boundary between Word and Meaning
+  // Case A: Explicit Delimiter (: = – — or - with whitespace or following closing paren)
   let delimMatch = cleaned.match(/\s*[:=–—]\s*/);
-  // For hyphen "-", only treat as delimiter if it has whitespace or is preceded by ")" or at line end
   if (!delimMatch) {
-    delimMatch = cleaned.match(/(?:\s+-\s*|\s*-\s+|\)\s*-\s*)/);
+    delimMatch = cleaned.match(/(?:\s+-\s*|\s*-\s+|(?<=\))\s*-\s*)/);
   }
 
   if (delimMatch && delimMatch.index !== undefined) {
-    entry.word = cleaned.substring(0, delimMatch.index).trim();
-    const rest = cleaned.substring(delimMatch.index + delimMatch[0].length).trim();
-    entry.meaning_vi = rest;
+    let rawWord = cleaned.substring(0, delimMatch.index);
+    let rawMeaning = cleaned.substring(delimMatch.index + delimMatch[0].length);
+
+    rawWord = stripIPAFromText(rawWord);
+    if (posMatch) rawWord = rawWord.replace(posMatch[0], ' ');
+    entry.word = cleanWordField(rawWord).word;
+
+    const cleanedMeaning = cleanMeaningField(rawMeaning);
+    entry.meaning_vi = cleanedMeaning.meaning;
+    if (cleanedMeaning.detectedPos && entry.pos === 'noun') {
+      entry.pos = cleanedMeaning.detectedPos;
+    }
     entry.hadDelimiter = true;
-  } else {
-    // No delimiter found — check if line is just the word (meaning may come on next line)
-    // Or: English word(s) followed by Vietnamese text
-    const langSplit = cleaned.match(/^([a-zA-Z\s'-]{2,35})\s+([^\x00-\x7F].+)$/);
-    if (langSplit) {
-      entry.word = langSplit[1].trim();
-      entry.meaning_vi = langSplit[2].trim();
+  }
+  // Case B: IPA was in line, separating Word from Meaning
+  // e.g. "appointment /əˈpɔɪnt.mənt/ cuộc hẹn"
+  else if (ipaIndex !== -1 && ipaIndex > 0) {
+    const rawBefore = cleaned.substring(0, ipaIndex);
+    const rawAfter = cleaned.substring(ipaIndex + ipaLength);
+
+    const wordObj = cleanWordField(rawBefore);
+    entry.word = wordObj.word;
+    if (wordObj.detectedPos && entry.pos === 'noun') entry.pos = wordObj.detectedPos;
+
+    let afterClean = stripIPAFromText(rawAfter);
+    if (posMatch) afterClean = afterClean.replace(posMatch[0], ' ');
+    afterClean = afterClean.replace(/^[-–—:=~•*\s]+/, '').trim();
+
+    if (afterClean) {
+      const meaningObj = cleanMeaningField(afterClean);
+      entry.meaning_vi = meaningObj.meaning;
+      if (meaningObj.detectedPos && entry.pos === 'noun') entry.pos = meaningObj.detectedPos;
+      entry.hadDelimiter = true;
+    }
+  }
+  // Case C: POS was in line, separating Word from Meaning
+  // e.g. "appointment (n) cuộc hẹn"
+  else if (posIndex !== -1 && posIndex > 0) {
+    const rawBefore = cleaned.substring(0, posIndex);
+    const rawAfter = cleaned.substring(posIndex + posLength);
+
+    entry.word = cleanWordField(stripIPAFromText(rawBefore)).word;
+
+    let afterClean = stripIPAFromText(rawAfter).replace(/^[-–—:=~•*\s]+/, '').trim();
+    if (afterClean) {
+      const meaningObj = cleanMeaningField(afterClean);
+      entry.meaning_vi = meaningObj.meaning;
+      entry.hadDelimiter = true;
+    }
+  }
+  // Case D: No delimiter, no IPA, no POS -> detect Vietnamese syllable boundary!
+  // e.g. "appointment cuộc hẹn" or "take advantage of tận dụng"
+  else {
+    const textWithoutIPA = stripIPAFromText(cleaned);
+    const tokens = textWithoutIPA.split(/\s+/).filter(t => t.length > 0);
+    let splitIdx = -1;
+
+    for (let i = 1; i < tokens.length; i++) {
+      if (isVietnameseText(tokens[i]) || isCommonVietnameseWord(tokens[i])) {
+        splitIdx = i;
+        break;
+      }
+    }
+
+    if (splitIdx !== -1) {
+      entry.word = tokens.slice(0, splitIdx).join(' ').trim();
+      const rawMeaning = tokens.slice(splitIdx).join(' ').trim();
+      entry.meaning_vi = cleanMeaningField(rawMeaning).meaning;
+      entry.hadDelimiter = true;
     } else {
-      // Just the word, no meaning on this line
-      entry.word = cleaned;
+      entry.word = cleanWordField(textWithoutIPA).word;
     }
   }
 
   if (!entry.word || entry.word.length < 2) return null;
 
-  // Filter out lines that are obvious sentences or instructions
+  // Filter obvious sentences
   if (entry.word.split(/\s+/).length > 6 || entry.word.endsWith('.') || entry.word.endsWith('?')) {
     return null;
   }
@@ -585,7 +804,7 @@ function parseVocabStartLine(rawLine: string): VocabEntryBuilder | null {
 }
 
 /**
- * Finalize a VocabEntryBuilder into a ParsedVocabularyRow, returning null if invalid.
+ * Finalize a VocabEntryBuilder into a ParsedVocabularyRow.
  */
 function finalizeEntry(
   builder: VocabEntryBuilder,
@@ -595,10 +814,9 @@ function finalizeEntry(
   today: string,
   idPrefix: string
 ): ParsedVocabularyRow | null {
-  const word = builder.word.replace(/^[\d+.)\-–—*\s]+/, '').trim();
+  const word = builder.word.replace(/^(?:Word|Term|No\.?|Item)?\s*[\d+.)\-–—*\s]+/i, '').trim();
   if (!word || word.length < 2) return null;
 
-  // Filter obvious sentences
   if (word.split(/\s+/).length > 6 || word.endsWith('.') || word.endsWith('?')) {
     return null;
   }
@@ -622,8 +840,8 @@ function finalizeEntry(
     selected: Boolean(word && builder.meaning_vi),
     word,
     pos: builder.pos,
-    phonetic_uk: builder.phonetic_uk || undefined,
-    phonetic_us: builder.phonetic_us || undefined,
+    phonetic_uk: formatAsIPA(builder.phonetic_uk),
+    phonetic_us: formatAsIPA(builder.phonetic_us),
     meaning_vi: builder.meaning_vi,
     example_en: builder.example_en || undefined,
     example_vi: builder.example_vi || undefined,
@@ -639,7 +857,6 @@ function finalizeEntry(
 
 /**
  * Process continuation lines, updating the current VocabEntryBuilder.
- * Returns true if the line was consumed as a continuation.
  */
 function processContinuationLine(line: string, builder: VocabEntryBuilder): boolean {
   const trimmed = line.trim();
@@ -661,15 +878,12 @@ function processContinuationLine(line: string, builder: VocabEntryBuilder): bool
   if (ukMatch) {
     const rest = trimmed.substring(ukMatch[0].length).trim();
     const ipa = extractIPAFromText(rest);
-    if (ipa.phonetic_us) {
-      // extractIPAFromText defaults to phonetic_us when unlabeled,
-      // but we know this is UK from the prefix
-      builder.phonetic_uk = ipa.phonetic_us;
-    } else if (ipa.phonetic_uk) {
+    if (ipa.phonetic_uk) {
       builder.phonetic_uk = ipa.phonetic_uk;
+    } else if (ipa.phonetic_us) {
+      builder.phonetic_uk = ipa.phonetic_us;
     } else {
-      // Raw text after prefix — might be IPA without brackets
-      const rawIPA = rest.replace(/[/[\]]/g, '').trim();
+      const rawIPA = formatAsIPA(rest);
       if (rawIPA) builder.phonetic_uk = rawIPA;
     }
     builder.lastFieldWasExampleEn = false;
@@ -686,7 +900,7 @@ function processContinuationLine(line: string, builder: VocabEntryBuilder): bool
     } else if (ipa.phonetic_uk) {
       builder.phonetic_us = ipa.phonetic_uk;
     } else {
-      const rawIPA = rest.replace(/[/[\]]/g, '').trim();
+      const rawIPA = formatAsIPA(rest);
       if (rawIPA) builder.phonetic_us = rawIPA;
     }
     builder.lastFieldWasExampleEn = false;
@@ -701,8 +915,7 @@ function processContinuationLine(line: string, builder: VocabEntryBuilder): bool
     if (ipa.phonetic_uk) builder.phonetic_uk = builder.phonetic_uk || ipa.phonetic_uk;
     if (ipa.phonetic_us) builder.phonetic_us = builder.phonetic_us || ipa.phonetic_us;
     if (!ipa.phonetic_uk && !ipa.phonetic_us) {
-      // Raw IPA text
-      const rawIPA = rest.replace(/[/[\]]/g, '').trim();
+      const rawIPA = formatAsIPA(rest);
       if (rawIPA && !builder.phonetic_us) builder.phonetic_us = rawIPA;
     }
     builder.lastFieldWasExampleEn = false;
@@ -775,9 +988,8 @@ function processContinuationLine(line: string, builder: VocabEntryBuilder): bool
     return true;
   }
 
-  // Standalone English sentence that could be an example (only if we have a word but no example yet)
-  // Heuristic: starts with uppercase, ends with period, and has > 3 words
-  if (builder.word && !builder.example_en && /^[A-Z]/.test(trimmed) && trimmed.endsWith('.') && trimmed.split(/\s+/).length > 3) {
+  // Standalone English sentence that could be an example
+  if (builder.word && !builder.example_en && /^[A-Z]/.test(trimmed) && trimmed.endsWith('.') && trimmed.split(/\s+/).length > 3 && !isVietnameseText(trimmed)) {
     builder.example_en = trimmed;
     builder.lastFieldWasExampleEn = true;
     return true;
@@ -788,7 +1000,6 @@ function processContinuationLine(line: string, builder: VocabEntryBuilder): bool
 
 /**
  * Parse structured text lines using multi-line grouping.
- * Handles entries that span multiple lines (IPA, meaning, example, translation on separate lines).
  */
 export function parseStructuredText(
   rawText: string,
@@ -836,6 +1047,26 @@ export function parseStructuredText(
       continue;
     }
 
+    // Check if line represents a vocab row missing the English word (e.g. "- đây là nghĩa nhưng thiếu từ")
+    const missingWordMatch = rawLine.match(/^[-*•\s]*[:=–—-]\s*([^\x00-\x7F].+)$/);
+    if (missingWordMatch && !currentBuilder) {
+      flushEntry();
+      result.push({
+        id: `txt_${Date.now()}_${entryIndex}_${Math.random().toString(36).substring(2, 6)}`,
+        selected: false,
+        word: '',
+        pos: 'noun',
+        meaning_vi: missingWordMatch[1].trim(),
+        topic: currentTopic || undefined,
+        unit: currentUnit || undefined,
+        study_date: today,
+        status: 'missing_word',
+        statusMessage: 'Thiếu từ tiếng Anh',
+      });
+      entryIndex++;
+      continue;
+    }
+
     // If we have a current entry, try to process as continuation
     if (currentBuilder && processContinuationLine(rawLine, currentBuilder)) {
       continue;
@@ -843,16 +1074,12 @@ export function parseStructuredText(
 
     // Check if this is a new vocab start line
     if (isVocabStartLine(rawLine)) {
-      // Finalize previous entry
       flushEntry();
-
-      // Parse this line as a new entry
       currentBuilder = parseVocabStartLine(rawLine);
       continue;
     }
 
-    // Check if line represents a vocab row missing the English word (e.g. "- đây là nghĩa nhưng thiếu từ")
-    const missingWordMatch = rawLine.match(/^[-*•\s]*[:=–—-]\s*([^\x00-\x7F].+)$/);
+    // Check if line is a missing word entry
     if (missingWordMatch) {
       flushEntry();
       result.push({
@@ -873,7 +1100,6 @@ export function parseStructuredText(
 
     // Line didn't match anything — if we have a current builder, 
     // check if it could be a Vietnamese meaning (continuation without prefix).
-    // Only valid if builder didn't have an explicit delimiter and line is not a new bullet
     if (
       currentBuilder &&
       !currentBuilder.meaning_vi &&
@@ -881,12 +1107,10 @@ export function parseStructuredText(
       !rawLine.match(/^[-*•\d+.)]/) &&
       isVietnameseText(rawLine)
     ) {
-      currentBuilder.meaning_vi = rawLine;
+      currentBuilder.meaning_vi = cleanMeaningField(rawLine).meaning;
       currentBuilder.lastFieldWasExampleEn = false;
       continue;
     }
-
-    // Standalone line we can't attach — skip it
   }
 
   // Flush last entry
@@ -897,7 +1121,6 @@ export function parseStructuredText(
 
 /**
  * Freeform document parser (Mode B):
- * Analyzes unstructured document, extracts vocabulary candidates and assigns detected Topics / Units.
  */
 export function parseFreeformDocument(
   docData: ExtractedDocumentData,
@@ -964,32 +1187,31 @@ export function parseFreeformDocument(
       !line.match(/^[-*•\d+.)]/) &&
       isVietnameseText(line)
     ) {
-      currentBuilder.meaning_vi = line;
+      currentBuilder.meaning_vi = cleanMeaningField(line).meaning;
       currentBuilder.lastFieldWasExampleEn = false;
       continue;
     }
 
     // No current builder — try heuristic extraction for "Term: Meaning" patterns
     if (!currentBuilder) {
-      const termDefMatch = line.match(/^[*•-]?\s*([A-Za-z\s'-]{2,30})\s*[:=]\s*(.+)$/);
+      const termDefMatch = line.match(/^[*•-]?\s*([A-Za-z\s'-]{2,30})\s*[:=–—-]\s*(.+)$/);
       if (termDefMatch) {
-        const term = termDefMatch[1].trim();
-        const def = termDefMatch[2].trim();
-
-        // Ensure term is not an instruction or label
+        const term = cleanWordField(termDefMatch[1]).word;
+        const defObj = cleanMeaningField(termDefMatch[2]);
         const lowerTerm = term.toLowerCase();
+
         if (!['note', 'notes', 'tip', 'warning', 'question', 'answer', 'part', 'test'].includes(lowerTerm)) {
           candidates.push({
             id: `free_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,
             selected: true,
             word: term,
-            pos: 'noun',
-            meaning_vi: def,
+            pos: defObj.detectedPos || 'noun',
+            meaning_vi: defObj.meaning,
             topic: currentTopic || undefined,
             unit: currentUnit || undefined,
             study_date: today,
-            status: def ? (currentTopic || currentUnit ? 'valid' : 'unassigned_category') : 'missing_meaning',
-            statusMessage: !def ? 'Chưa nhận diện được nghĩa' : !currentTopic && !currentUnit ? 'Chưa xác định Topic/Unit' : undefined,
+            status: defObj.meaning ? (currentTopic || currentUnit ? 'valid' : 'unassigned_category') : 'missing_meaning',
+            statusMessage: !defObj.meaning ? 'Chưa nhận diện được nghĩa' : !currentTopic && !currentUnit ? 'Chưa xác định Topic/Unit' : undefined,
           });
         }
       }
@@ -1024,10 +1246,8 @@ export function analyzeExtractedDocument(
 
 function parseDateOrFallback(val: string, fallback: string): string {
   if (!val) return fallback;
-  // Check if valid ISO YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
 
-  // Check DD/MM/YYYY
   const dmy = val.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
   if (dmy) {
     const day = dmy[1].padStart(2, '0');

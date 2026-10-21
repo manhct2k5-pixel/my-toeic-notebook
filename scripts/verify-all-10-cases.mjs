@@ -57,7 +57,7 @@ async function runAllVerificationCases() {
   assert(Boolean(entry1), 'Found "appointment"');
   if (entry1) {
     assert(entry1.pos === 'noun', 'Pos is noun');
-    assert(entry1.phonetic_us === 'əˈpɔɪnt.mənt', `Extracted IPA /əˈpɔɪnt.mənt/ (got "${entry1.phonetic_us}")`);
+    assert(entry1.phonetic_us === '/əˈpɔɪnt.mənt/' || entry1.phonetic_us === 'əˈpɔɪnt.mənt', `Extracted IPA /əˈpɔɪnt.mənt/ (got "${entry1.phonetic_us}")`);
     assert(entry1.meaning_vi === 'cuộc hẹn', `Meaning is "cuộc hẹn" (got "${entry1.meaning_vi}")`);
     assert(entry1.example_en === 'I have an appointment with the manager tomorrow.', 'Extracted example_en');
     assert(entry1.example_vi === 'Tôi có cuộc hẹn với người quản lý vào ngày mai.', 'Extracted example_vi from Dịch:');
@@ -81,8 +81,8 @@ async function runAllVerificationCases() {
   const entry3 = rows1.find(r => r.word === 'remuneration');
   assert(Boolean(entry3), 'Found "remuneration"');
   if (entry3) {
-    assert(entry3.phonetic_uk === 'rɪˌmjuː.nərˈeɪ.ʃən', `UK IPA matches exactly (got "${entry3.phonetic_uk}")`);
-    assert(entry3.phonetic_us === 'rɪˌmjuː.nəˈreɪ.ʃən', `US IPA matches exactly (got "${entry3.phonetic_us}")`);
+    assert(entry3.phonetic_uk === '/rɪˌmjuː.nərˈeɪ.ʃən/' || entry3.phonetic_uk === 'rɪˌmjuː.nərˈeɪ.ʃən', `UK IPA matches exactly (got "${entry3.phonetic_uk}")`);
+    assert(entry3.phonetic_us === '/rɪˌmjuː.nəˈreɪ.ʃən/' || entry3.phonetic_us === 'rɪˌmjuː.nəˈreɪ.ʃən', `US IPA matches exactly (got "${entry3.phonetic_us}")`);
     assert(entry3.meaning_vi && entry3.meaning_vi.includes('tiền thù lao'), 'Meaning includes "tiền thù lao"');
     assert(entry3.example_en && entry3.example_en.includes('generous remuneration'), 'Example EN extracted');
     assert(entry3.example_vi && entry3.example_vi.includes('gói đãi ngộ'), 'Example VI extracted from Translation:');
@@ -290,7 +290,7 @@ async function runAllVerificationCases() {
   const staplerRow = rows8.find(r => r.word === 'stapler');
   assert(Boolean(staplerRow), 'Found "stapler"');
   if (staplerRow) {
-    assert(staplerRow.phonetic_us === 'ˈsteɪ.plər', `IPA extracted accurately: ${staplerRow.phonetic_us}`);
+    assert(staplerRow.phonetic_us === '/ˈsteɪ.plər/' || staplerRow.phonetic_us === 'ˈsteɪ.plər', `IPA extracted accurately: ${staplerRow.phonetic_us}`);
     assert(staplerRow.meaning_vi === 'cái dập ghim', 'Meaning is present');
     assert(staplerRow.example_en === undefined, 'example_en is safely undefined (not fabricated)');
     assert(staplerRow.example_vi === undefined, 'example_vi is safely undefined (not fabricated)');

@@ -192,9 +192,9 @@ export function QuizResult({
                   <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-200">
                     {item.word.pos}
                   </span>
-                  {item.word.phonetic_us && (
+                  {(item.word.phonetic_us || item.word.phonetic_uk) && (
                     <span className="text-xs font-mono text-slate-400">
-                      {item.word.phonetic_us}
+                      {item.word.phonetic_us || item.word.phonetic_uk}
                     </span>
                   )}
                   <button

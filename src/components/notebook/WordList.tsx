@@ -199,9 +199,9 @@ export function WordList({
                   <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200/60">
                     {posShort}
                   </span>
-                  {item.phonetic_us && (
+                  {(item.phonetic_us || item.phonetic_uk) && (
                     <span className="text-[11px] text-slate-400 font-mono">
-                      {item.phonetic_us}
+                      {item.phonetic_us || item.phonetic_uk}
                     </span>
                   )}
                 </div>
