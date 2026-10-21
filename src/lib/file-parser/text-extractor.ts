@@ -232,7 +232,13 @@ export async function extractFromExcel(file: File): Promise<{ headers: string[];
 /**
  * Extract data from modern Word document (.docx)
  */
-export async function extractFromDocx(file: File): Promise<{ rawText: string; html: string; detectedHeadings: string[] }> {
+export async function extractFromDocx(file: File): Promise<{
+  rawText: string;
+  html: string;
+  detectedHeadings: string[];
+  tableHeaders: string[];
+  tableRows: Record<string, string>[];
+}> {
   const arrayBuffer = await file.arrayBuffer();
   const input = typeof Buffer !== 'undefined' ? { buffer: Buffer.from(arrayBuffer) } : { arrayBuffer };
 
@@ -254,10 +260,56 @@ export async function extractFromDocx(file: File): Promise<{ rawText: string; ht
     }
   }
 
+  // Extract table data from HTML (mammoth produces clean <table> markup)
+  let tableHeaders: string[] = [];
+  let tableRows: Record<string, string>[] = [];
+
+  const tableMatch = html.match(/<table>([\s\S]*?)<\/table>/i);
+  if (tableMatch) {
+    const tableHtml = tableMatch[1];
+    const stripTags = (s: string): string => s.replace(/<[^>]+>/g, '').trim();
+
+    // Extract all rows from the table
+    const rowMatches = [...tableHtml.matchAll(/<tr>([\s\S]*?)<\/tr>/gi)];
+
+    if (rowMatches.length > 0) {
+      // First row: extract headers from <th> or <td>
+      const headerRowHtml = rowMatches[0][1];
+      const headerCells = [...headerRowHtml.matchAll(/<(?:th|td)[^>]*>([\s\S]*?)<\/(?:th|td)>/gi)];
+      tableHeaders = headerCells.map((cell, idx) => {
+        const text = stripTags(cell[1]);
+        return text.length > 0 ? text : `Cột_${idx + 1}`;
+      });
+
+      // Remaining rows: extract data cells
+      for (let r = 1; r < rowMatches.length; r++) {
+        const cellMatches = [...rowMatches[r][1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)];
+        if (cellMatches.length === 0) continue;
+
+        // Skip entirely empty rows
+        const allEmpty = cellMatches.every((c) => stripTags(c[1]).length === 0);
+        if (allEmpty) continue;
+
+        const rowObj: Record<string, string> = {};
+        for (let c = 0; c < tableHeaders.length; c++) {
+          rowObj[tableHeaders[c]] = c < cellMatches.length ? stripTags(cellMatches[c][1]) : '';
+        }
+        tableRows.push(rowObj);
+      }
+
+      // If we parsed headers but got no data rows, reset to avoid partial state
+      if (tableRows.length === 0) {
+        tableHeaders = [];
+      }
+    }
+  }
+
   return {
     rawText,
     html,
     detectedHeadings: headings,
+    tableHeaders,
+    tableRows,
   };
 }
 
@@ -364,6 +416,12 @@ export async function extractDocumentData(file: File): Promise<ExtractedDocument
     const parsed = await extractFromDocx(file);
     rawText = parsed.rawText;
     
+    // If DOCX contains table data, feed it into the tabular pipeline
+    if (parsed.tableHeaders.length >= 2 && parsed.tableRows.length > 0) {
+      headers = parsed.tableHeaders;
+      rawRows = parsed.tableRows;
+    }
+
     // Check headings for topic/unit hints
     parsed.detectedHeadings.forEach((h) => {
       const lower = h.toLowerCase();

@@ -58,6 +58,10 @@ export function PreviewTable({
   const duplicateCount = rows.filter((r) => r.status === 'duplicate').length;
   const issueCount = rows.filter((r) => r.status === 'missing_word' || r.status === 'missing_meaning').length;
 
+  // Content statistics
+  const ipaCount = rows.filter((r) => r.phonetic_uk || r.phonetic_us).length;
+  const exampleCount = rows.filter((r) => r.example_en).length;
+
   // Filtered rows for display
   const displayedRows = useMemo(() => {
     return rows.filter((r) => {
@@ -170,6 +174,23 @@ export function PreviewTable({
 
   return (
     <div className="space-y-3">
+      {/* Statistics Banner */}
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium">
+          <span className="font-bold text-slate-900">{totalCount}</span> từ
+        </span>
+        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium ${
+          ipaCount > 0 ? 'bg-violet-50 text-violet-700' : 'bg-slate-50 text-slate-400'
+        }`}>
+          <span className="font-bold">{ipaCount}</span> có IPA
+        </span>
+        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium ${
+          exampleCount > 0 ? 'bg-sky-50 text-sky-700' : 'bg-slate-50 text-slate-400'
+        }`}>
+          <span className="font-bold">{exampleCount}</span> có ví dụ
+        </span>
+      </div>
+
       {/* 1. Header Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -332,8 +353,10 @@ export function PreviewTable({
                 </th>
                 <th className="min-w-[140px] px-3 py-2.5 font-bold">Từ tiếng Anh (Word) *</th>
                 <th className="w-24 px-2 py-2.5 font-bold">Loại từ</th>
+                <th className="min-w-[140px] px-2 py-2.5 font-bold text-violet-700">Phiên âm (IPA)</th>
                 <th className="min-w-[160px] px-3 py-2.5 font-bold">Nghĩa tiếng Việt *</th>
                 <th className="min-w-[180px] px-3 py-2.5 font-medium text-slate-600">Câu ví dụ (Example)</th>
+                <th className="min-w-[160px] px-3 py-2.5 font-medium text-slate-600">Dịch ví dụ (VI)</th>
                 <th className="min-w-[130px] px-3 py-2.5 font-medium text-slate-600">Ghi chú (Notes)</th>
                 <th className="w-32 px-2 py-2.5 font-medium text-slate-600">Chủ đề (Topic)</th>
                 <th className="w-36 px-2 py-2.5 font-medium text-slate-600">Unit / Bài học</th>
@@ -390,6 +413,26 @@ export function PreviewTable({
                     </select>
                   </td>
 
+                  {/* IPA (Phonetic UK / US) */}
+                  <td className="px-1.5 py-1.5">
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="text"
+                        value={row.phonetic_uk || ''}
+                        onChange={(e) => handleRowChange(row.id, { phonetic_uk: e.target.value })}
+                        placeholder="UK: /.../"
+                        className="w-full px-1.5 py-0.5 font-mono text-[11px] rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-300"
+                      />
+                      <input
+                        type="text"
+                        value={row.phonetic_us || ''}
+                        onChange={(e) => handleRowChange(row.id, { phonetic_us: e.target.value })}
+                        placeholder="US: /.../"
+                        className="w-full px-1.5 py-0.5 font-mono text-[11px] rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-300"
+                      />
+                    </div>
+                  </td>
+
                   {/* Meaning VI */}
                   <td className="px-2 py-1.5">
                     <input
@@ -412,6 +455,17 @@ export function PreviewTable({
                       value={row.example_en || ''}
                       onChange={(e) => handleRowChange(row.id, { example_en: e.target.value })}
                       placeholder="Câu ví dụ..."
+                      className="w-full px-2 py-1 text-xs rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+
+                  {/* Example VI */}
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={row.example_vi || ''}
+                      onChange={(e) => handleRowChange(row.id, { example_vi: e.target.value })}
+                      placeholder="Dịch ví dụ..."
                       className="w-full px-2 py-1 text-xs rounded border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </td>
@@ -506,7 +560,7 @@ export function PreviewTable({
 
               {displayedRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-xs text-slate-400 italic">
+                  <td colSpan={12} className="px-4 py-8 text-center text-xs text-slate-400 italic">
                     Không tìm thấy dòng từ vựng nào khớp với bộ lọc.
                   </td>
                 </tr>
