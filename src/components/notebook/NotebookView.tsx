@@ -17,7 +17,8 @@ import { WordDetail } from './WordDetail';
 import { WordModal } from './WordModal';
 import { TopicModal } from './TopicModal';
 import { UnitModal } from './UnitModal';
-import { ArrowLeft, BookOpen, Layers, Tag, Menu } from 'lucide-react';
+import { ImportModal } from './import/ImportModal';
+import { ArrowLeft, BookOpen, Layers, Tag, Menu, Upload } from 'lucide-react';
 import { useNotebook } from '@/lib/notebook-context';
 
 export function NotebookView() {
@@ -44,6 +45,8 @@ export function NotebookView() {
 
   const [unitModalOpen, setUnitModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Load data function
   const loadData = async () => {
@@ -185,7 +188,16 @@ export function NotebookView() {
       {/* Mobile Top Navigation Breadcrumbs */}
       <div className="md:hidden flex items-center justify-between px-4 py-2.5 bg-slate-100 border-b border-slate-200 text-xs">
         {mobileScreen === 'categories' && (
-          <span className="font-semibold text-slate-800">Danh mục Sổ từ vựng</span>
+          <div className="flex items-center justify-between w-full">
+            <span className="font-semibold text-slate-800">Danh mục Sổ từ vựng</span>
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 border border-blue-200"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-600" />
+              <span>+ Nhập file</span>
+            </button>
+          </div>
         )}
 
         {mobileScreen === 'list' && (
@@ -251,6 +263,7 @@ export function NotebookView() {
               setUnitModalOpen(true);
             }}
             onDeleteUnit={deleteUnit}
+            onOpenImport={() => setImportModalOpen(true)}
           />
         </div>
 
@@ -267,6 +280,7 @@ export function NotebookView() {
             selectedWordId={selectedWordId}
             onSelectWord={handleSelectWord}
             onOpenAddModal={handleOpenAddWord}
+            onOpenImportModal={() => setImportModalOpen(true)}
             viewTitle={viewTitle}
           />
         </div>
@@ -326,6 +340,18 @@ export function NotebookView() {
         onClose={() => setUnitModalOpen(false)}
         onSaved={(savedUnit) => {
           handleSelectView('unit', savedUnit.id);
+        }}
+      />
+
+      {/* Vocabulary Import From File Modal */}
+      <ImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        existingTopics={topics}
+        existingUnits={units}
+        existingVocabulary={words}
+        onImportSuccess={() => {
+          loadData();
         }}
       />
 

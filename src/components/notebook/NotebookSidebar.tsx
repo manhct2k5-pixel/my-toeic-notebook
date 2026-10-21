@@ -14,7 +14,8 @@ import {
   Trash2, 
   ChevronDown, 
   ChevronRight,
-  Clock
+  Clock,
+  Upload
 } from 'lucide-react';
 import { Topic, Unit, VocabularyItem } from '@/types';
 
@@ -39,6 +40,7 @@ interface NotebookSidebarProps {
   onOpenNewUnit: () => void;
   onEditUnit: (unit: Unit) => void;
   onDeleteUnit: (unitId: string) => void;
+  onOpenImport?: () => void;
 }
 
 export function NotebookSidebar({
@@ -54,6 +56,7 @@ export function NotebookSidebar({
   onOpenNewUnit,
   onEditUnit,
   onDeleteUnit,
+  onOpenImport,
 }: NotebookSidebarProps) {
   const [topicsExpanded, setTopicsExpanded] = useState(true);
   const [unitsExpanded, setUnitsExpanded] = useState(true);
@@ -352,6 +355,19 @@ export function NotebookSidebar({
             </div>
           )}
         </div>
+
+        {/* D. IMPORT FROM FILE SHORTCUT */}
+        {onOpenImport && (
+          <div className="pt-2 border-t border-slate-200/80">
+            <button
+              onClick={onOpenImport}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100/80 border border-blue-200 transition-colors shadow-2xs"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-600" />
+              <span>+ Nhập từ file</span>
+            </button>
+          </div>
+        )}
 
       </div>
     </aside>

@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   Clock, 
   AlertCircle,
-  Volume2
+  Volume2,
+  Upload
 } from 'lucide-react';
 import { VocabularyItem, Topic, Unit } from '@/types';
 import { playAudioOrSpeak } from '@/lib/speech';
@@ -21,6 +22,7 @@ interface WordListProps {
   selectedWordId: string | null;
   onSelectWord: (word: VocabularyItem) => void;
   onOpenAddModal: () => void;
+  onOpenImportModal: () => void;
   viewTitle: string;
 }
 
@@ -31,6 +33,7 @@ export function WordList({
   selectedWordId,
   onSelectWord,
   onOpenAddModal,
+  onOpenImportModal,
   viewTitle,
 }: WordListProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,13 +105,24 @@ export function WordList({
             {filteredWords.length} / {words.length} từ vựng
           </p>
         </div>
-        <button
-          onClick={onOpenAddModal}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Thêm từ</span>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={onOpenImportModal}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs transition-colors"
+            title="Nhập từ file TXT, DOCX, CSV, Excel, PDF"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">+ Nhập từ file</span>
+            <span className="sm:hidden">+ Nhập</span>
+          </button>
+          <button
+            onClick={onOpenAddModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Thêm từ</span>
+          </button>
+        </div>
       </div>
 
       {/* Search Bar */}
